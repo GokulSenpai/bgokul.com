@@ -300,6 +300,8 @@ const pad = (n: number) => String(n).padStart(2, "0");
 <script>
   import { navigate } from "astro:transitions/client";
   import { unlock, playedGame } from "@/scripts/achievements";
+  import { sfx } from "@/components/home/bootSound";
+  import { soundOn } from "@/scripts/cameFrom";
 
   let ctrl: AbortController | null = null;
 
@@ -340,6 +342,21 @@ const pad = (n: number) => String(n).padStart(2, "0");
         if (startBtn) setTimeout(() => startBtn.click(), reduce ? 0 : 450);
       },
       { signal }
+    );
+
+    // Previous / Next game: a cartridge swap, the library's two sounds in a
+    // row: this one released, then the next one clunking in. (The fade and
+    // the move itself are the shared data-fade link.)
+    root.querySelectorAll<HTMLAnchorElement>(".more-btn:not(.is-contact)").forEach(a =>
+      a.addEventListener(
+        "click",
+        e => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0 || !soundOn()) return;
+          sfx([146.83, 196], 0.05, 0.07); // the release
+          setTimeout(() => sfx([196, 146.83], 0.05, 0.08), 260); // the clunk
+        },
+        { signal }
+      )
     );
 
     // Esc goes back to the games list, unless an image viewer is open

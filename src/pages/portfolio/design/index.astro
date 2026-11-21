@@ -667,11 +667,11 @@ const scuffs = svg(
       )
     );
 
-    // Touch: the whole screen is a swipe area, not just the cards, so the
-    // thumb can stay at the bottom. A sideways drag anywhere moves the deck
-    // live under the finger (like a trackpad); letting go snaps to the next
-    // or previous game. Drags that start vertical are left alone, so the
-    // page still scrolls. The deck itself scrolls natively.
+    // Touch: only the cartridges swipe. On phones the deck scrolls natively
+    // under the finger; on bigger touch screens (the shelf) a sideways drag
+    // that starts on a cartridge moves the selection, and letting go snaps to
+    // the next or previous game. A swipe anywhere else does nothing, and
+    // drags that start vertical are left alone, so the page still scrolls.
     let drag: {
       x: number;
       y: number;
@@ -684,7 +684,7 @@ const scuffs = svg(
       "touchstart",
       e => {
         const t = e.target as HTMLElement;
-        if (e.touches.length !== 1 || t.closest("[data-deck]")) return void (drag = null);
+        if (e.touches.length !== 1 || t.closest("[data-deck]") || !t.closest(".roster")) return void (drag = null);
         const p = e.touches[0];
         drag = {
           x: p.clientX,

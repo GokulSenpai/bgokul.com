@@ -4,8 +4,8 @@
  * site: no pixel font, no navy, no HUD, no Esc, no menu. A long corridor of
  * yellow wallpaper, damp carpet and fluorescent panels, and one line of
  * plain Times New Roman as if the styling never loaded, ending "Escape.".
- * The only way out: press Esc three times (three quick taps on a phone), or
- * the browser's back button. Arriving unlocks the "No-clip" achievement.
+ * The only way out: press Esc three times, or (on a phone) hold on a side
+ * wall for three seconds to push through it, or the browser's back button. Arriving unlocks the "No-clip" achievement.
  *
  * Photosensitivity: nothing here flashes or strobes. The corridor is one
  * still drawing (SVG, in one-point perspective) that sways very slowly, and
@@ -28,13 +28,15 @@ import Layout from "@/layouts/Layout.astro";
     <canvas class="hall" data-hall aria-hidden="true"></canvas>
     <div class="haze" aria-hidden="true"></div>
     <div class="dim" aria-hidden="true"></div>
+    <!-- Pushing through a wall (touch): the world whites out as you hold. -->
+    <div class="push" data-push aria-hidden="true"></div>
 
     <!-- Unstyled on purpose. -->
     <div class="unstyled">
       <h1>Level 0</h1>
       <p>You noclipped out of reality.</p>
-      <!-- The way out, as a hint: the Esc key, or on touch screens, taps. -->
-      <p><small>Escape.<span class="tap-hint"> Tap, tap, tap.</span></small></p>
+      <!-- The way out, as a hint: the Esc key, or on touch screens, a wall. -->
+      <p><small>Escape.<span class="tap-hint"> Walk through a wall.</span></small></p>
     </div>
   </main>
 </Layout>
@@ -218,8 +220,7 @@ import Layout from "@/layouts/Layout.astro";
     // toast plays out while you look around.
     unlock("noclip");
 
-    // The way out: press Esc three times (three quick taps on a touch
-    // screen).
+    // The way out: press Esc three times, or push through a wall (below).
     let leaving = false;
     const leave = () => {
       if (leaving) return;
@@ -235,19 +236,51 @@ import Layout from "@/layouts/Layout.astro";
       e.preventDefault();
       if (++escs >= 3) leave();
     };
-    let taps: number[] = [];
-    // Three quick taps or clicks anywhere (any pointer: touch or mouse).
-    const onTap = (e: PointerEvent) => {
-      if (e.button > 0) return;
-      const now = performance.now();
-      taps = [...taps.filter(t => now - t < 900), now];
-      if (taps.length >= 3) leave();
+    // No Esc key (a phone): noclip back out the way you came in, through a
+    // wall. Press and hold on either side wall of the corridor; the world
+    // slowly whites out while you push, and after three seconds you're
+    // through. Let go early and it fades back. (A mouse can do it too.)
+    const PUSH = 3000;
+    const push = root.querySelector<HTMLElement>("[data-push]")!;
+    let held: number | null = null; // the pointer pushing on a wall
+    let amount = 0; // 0 to 1
+    let last = 0;
+    let pushRaf = 0;
+    const step = (now: number) => {
+      const dt = Math.min(64, now - last);
+      last = now;
+      // Pushing builds over three seconds; letting go eases back faster.
+      amount = held !== null ? amount + dt / PUSH : amount - dt / 700;
+      amount = Math.max(0, Math.min(1, amount));
+      push.style.opacity = (amount * 0.9).toFixed(3);
+      if (amount >= 1 && held !== null) return leave();
+      pushRaf = amount > 0 || held !== null ? requestAnimationFrame(step) : 0;
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button > 0 || leaving) return;
+      const x = e.clientX / innerWidth;
+      if (x > 0.3 && x < 0.7) return; // the corridor ahead, not a wall
+      held = e.pointerId;
+      last = performance.now();
+      if (!pushRaf) pushRaf = requestAnimationFrame(step);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId === held) held = null;
     };
     document.addEventListener("keydown", onKey);
-    root.addEventListener("pointerdown", onTap);
+    root.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    // A long press would open the phone's menu instead.
+    const noMenu = (e: Event) => e.preventDefault();
+    root.addEventListener("contextmenu", noMenu);
     offKeys = () => {
       document.removeEventListener("keydown", onKey);
-      root.removeEventListener("pointerdown", onTap);
+      root.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      root.removeEventListener("contextmenu", noMenu);
+      cancelAnimationFrame(pushRaf);
     };
   }
 
@@ -349,7 +382,23 @@ import Layout from "@/layouts/Layout.astro";
   .unstyled p {
     margin: 1em 0;
   }
-  /* The tap hint only where there's no Esc key to press. */
+  /* Pushing through a wall: a white wash that builds while you hold. */
+  .push {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* Holding on the walls shouldn't select text or open the long-press
+     callout. */
+  .backrooms {
+    -webkit-touch-callout: none;
+    touch-action: none;
+    user-select: none;
+  }
+  /* The wall hint only where there's no Esc key to press. */
   .tap-hint {
     display: none;
   }

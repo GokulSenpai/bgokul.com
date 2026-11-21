@@ -1052,6 +1052,12 @@ const ALWAYS_BOOT = false;
     gap: 0.6rem;
     transition: opacity 0.7s ease;
   }
+  /* Phones: a little higher, so it isn't crowding the heading below. */
+  @media (max-width: 767px) {
+    .hud-tr {
+      top: 0.75rem;
+    }
+  }
   .ambient-btn {
     display: inline-flex;
     align-items: center;

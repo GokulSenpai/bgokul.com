@@ -147,34 +147,66 @@ const mottle = svg(
 
   let cleanup: (() => void) | null = null;
 
-  // Desktop only: the card leans toward the pointer, like it's being
-  // held up to the light. Transform only, so it stays smooth.
+  // The card leans toward the pointer, like it's being held up to the
+  // light. With a mouse it follows the pointer anywhere on the screen; on
+  // a touch screen it leans toward the finger while you press and drag on
+  // it, and settles back flat when you let go. Transform only, so it stays
+  // smooth. Off with reduced motion.
   function initTilt() {
     const el = document.querySelector<HTMLElement>("[data-tilt]");
     if (!el || el.dataset.ready) return;
     el.dataset.ready = "1";
-    if (!matchMedia("(hover: hover) and (prefers-reduced-motion: no-preference)").matches) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const ac = new AbortController();
+    const { signal } = ac;
     let raf = 0;
-    window.addEventListener(
-      "pointermove",
-      e => {
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(() => {
-          const x = e.clientX / innerWidth - 0.5;
-          const y = e.clientY / innerHeight - 0.5;
-          el.style.setProperty("--ry", `${(x * 17).toFixed(2)}deg`);
-          el.style.setProperty("--rx", `${(-y * 13).toFixed(2)}deg`);
-          // The shadow falls away from the raised edge.
-          el.style.setProperty("--sx", `${(-x * 28).toFixed(1)}px`);
-          el.style.setProperty("--sy", `${(30 - y * 20).toFixed(1)}px`);
-          el.style.setProperty("--gx", `${(50 + x * 60).toFixed(1)}%`);
-          el.style.setProperty("--gy", `${(50 + y * 60).toFixed(1)}%`);
-        });
-      },
-      { signal: ac.signal }
-    );
+    // x and y from -0.5 to 0.5: where the pointer is, across the screen
+    // (mouse) or across the card (finger).
+    const lean = (x: number, y: number) => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        el.style.setProperty("--ry", `${(x * 17).toFixed(2)}deg`);
+        el.style.setProperty("--rx", `${(-y * 13).toFixed(2)}deg`);
+        // The shadow falls away from the raised edge.
+        el.style.setProperty("--sx", `${(-x * 28).toFixed(1)}px`);
+        el.style.setProperty("--sy", `${(30 - y * 20).toFixed(1)}px`);
+        el.style.setProperty("--gx", `${(50 + x * 60).toFixed(1)}%`);
+        el.style.setProperty("--gy", `${(50 + y * 60).toFixed(1)}%`);
+      });
+    };
+
+    if (matchMedia("(hover: hover)").matches) {
+      window.addEventListener("pointermove", e => lean(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5), { signal });
+    } else {
+      // Touch: the finger's spot on the card, a little past its edges
+      // still counting (clamped), so the whole lean is in reach.
+      const fromFinger = (e: PointerEvent) => {
+        const r = el.getBoundingClientRect();
+        const c = (v: number) => Math.max(-0.5, Math.min(0.5, v));
+        lean(c((e.clientX - r.left) / r.width - 0.5), c((e.clientY - r.top) / r.height - 0.5));
+      };
+      let id: number | null = null;
+      el.addEventListener(
+        "pointerdown",
+        e => {
+          if (e.pointerType === "mouse") return;
+          id = e.pointerId;
+          el.classList.remove("is-settling");
+          fromFinger(e);
+        },
+        { signal }
+      );
+      el.addEventListener("pointermove", e => e.pointerId === id && fromFinger(e), { signal });
+      const release = (e: PointerEvent) => {
+        if (e.pointerId !== id) return;
+        id = null;
+        el.classList.add("is-settling"); // a slower ease back to flat
+        lean(0, 0);
+      };
+      el.addEventListener("pointerup", release, { signal });
+      el.addEventListener("pointercancel", release, { signal });
+    }
     cleanup = () => {
       ac.abort();
       cancelAnimationFrame(raf);
@@ -293,6 +325,9 @@ const mottle = svg(
     const label = copy?.querySelector<HTMLElement>("[data-copy-label]");
     let t = 0;
     copy?.addEventListener("click", async () => {
+      // Hold the button at its width while the shorter "Copied!" shows, so
+      // the row doesn't reflow (it would hop up beside "Use" and back).
+      copy.style.minWidth = `${copy.getBoundingClientRect().width}px`;
       try {
         await navigator.clipboard.writeText(copy.dataset.copy ?? "");
         label!.textContent = "Copied!";
@@ -300,7 +335,10 @@ const mottle = svg(
         label!.textContent = copy.dataset.copy ?? "";
       }
       window.clearTimeout(t);
-      t = window.setTimeout(() => (label!.textContent = "Copy mail address"), 1800);
+      t = window.setTimeout(() => {
+        label!.textContent = "Copy mail address";
+        copy.style.minWidth = "";
+      }, 1800);
     });
   }
 
@@ -395,6 +433,18 @@ const mottle = svg(
     position: relative;
     width: min(100%, 900px, 50svh * 1.75);
     perspective: 1400px;
+  }
+  /* Touch: dragging on the card tilts it (instead of scrolling the page),
+     and letting go eases it back to flat. */
+  @media (hover: none) {
+    .tilt {
+      touch-action: none;
+    }
+  }
+  .tilt.is-settling .card {
+    transition:
+      transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   }
   /* The inspect reticle: amber pixel corner brackets that snap in around
      the card once it lands (in a few hard steps, like a game cursor
