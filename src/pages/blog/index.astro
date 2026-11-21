@@ -1,0 +1,85 @@
+---
+/**
+ * The Journal: a notebook on the desk. The latest (or a featured) entry at
+ * the top, then the recent ones as dated lines, then the ways around: all
+ * entries, tags, archives, search, RSS. Styles: Notebook / JournalEntry.
+ */
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Notebook from "@/components/journal/Notebook.astro";
+import JournalEntry from "@/components/journal/JournalEntry.astro";
+import { getSortedPosts } from "@/utils/getSortedPosts";
+import { getUniqueTags } from "@/utils/getUniqueTags";
+import config from "@/config";
+
+const allPosts = await getCollection("posts", ({ data }) => (import.meta.env.PROD ? !data.draft : true));
+const sorted = getSortedPosts(allPosts);
+// The big one at the top: the newest featured entry, else the newest.
+const top = sorted.find(p => p.data.featured) ?? sorted[0];
+const recent = sorted.filter(p => p !== top).slice(0, 6);
+const tags = getUniqueTags(allPosts);
+const count = sorted.length;
+---
+
+<Layout title={`Journal | ${config.site.title}`} description="Devlog notes: process fragments and half-formed design thoughts.">
+  <Header />
+
+  <Notebook
+    title="Journal"
+    kicker={`${count} ${count === 1 ? "entry" : "entries"} so far`}
+    desc="Devlog notes, mostly: process fragments and half-formed design thoughts, written down now and then and left unpolished."
+    art
+  >
+    {
+      top ? (
+        <>
+          <p class="nb-section">Latest</p>
+          <ul class="nb-entries">
+            <JournalEntry post={top} featured />
+          </ul>
+        </>
+      ) : (
+        <p class="nb-note">Nothing written yet. Soon.</p>
+      )
+    }
+
+    {
+      recent.length > 0 && (
+        <>
+          <p class="nb-section">Earlier</p>
+          <ul class="nb-entries">
+            {recent.map(p => (
+              <JournalEntry post={p} />
+            ))}
+          </ul>
+        </>
+      )
+    }
+
+    {
+      tags.length > 0 && (
+        <>
+          <p class="nb-section">Tags</p>
+          <ul class="nb-tags">
+            {tags.map(({ tag, tagName }) => (
+              <li>
+                <a class="nb-tag" href={`/tags/${tag}/`}>#{tagName}</a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )
+    }
+
+    <div class="nb-links">
+      <a class="nb-btn" href="/blog/all/">All entries</a>
+      <a class="nb-btn" href="/archives/">Archives</a>
+      <a class="nb-btn" href="/search/">Search</a>
+      <a class="nb-btn" href="/rss.xml" target="_blank" rel="noopener">RSS</a>
+    </div>
+  </Notebook>
+
+  <Footer />
+</Layout>

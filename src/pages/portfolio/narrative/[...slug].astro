@@ -1,0 +1,900 @@
+---
+import { getCollection, render } from "astro:content";
+import { Image } from "astro:assets";
+import NarrativeShell from "@/components/narrative/NarrativeShell.astro";
+import TitleCipher from "@/components/narrative/17ya/TitleCipher.astro";
+import { STATUS_LABEL, roman } from "@/components/narrative/narrative";
+import config from "@/config";
+
+export async function getStaticPaths() {
+  const entries = (await getCollection("narrative")).sort((a, b) => a.data.order - b.data.order);
+  return entries.map((entry, i) => ({
+    params: { slug: entry.id },
+    // The next chapter (if any), for the link at the end of this one.
+    props: { entry, chapter: i + 1, next: entries[i + 1] ? { id: entries[i + 1].id, title: entries[i + 1].data.title } : null },
+  }));
+}
+
+const { entry, chapter, next } = Astro.props;
+const { title, kind, status, year, hook, cover, links, palette, descent, finale, titleArt } =
+  entry.data;
+const { Content } = await render(entry);
+const chapterLabel = `Chapter ${roman(chapter)}`;
+// Key art (wider than tall) sits above the title instead of beside it.
+const landscape = !!cover && cover.width > cover.height;
+---
+
+<NarrativeShell
+  title={`${title} | ${config.site.title}`}
+  description={hook ?? `${title}: ${kind}.`}
+  palette={palette}
+>
+  <div class:list={["chapter", { "is-descent": descent }]}>
+    <!-- The way back, in the chapter's own colours and type. Esc too. -->
+    <header class="runhead">
+      <a href="/portfolio/narrative" class="nv-caps back" data-nv-back>&lsaquo; Contents<kbd class="nv-key">Esc</kbd></a>
+      <a href="/" class="nv-caps back nv-home" data-home title="Main menu (Home key)">⌂ Menu</a>
+    </header>
+
+    <article class="body">
+      {
+        titleArt === "17ya-cipher" && (
+          /* Title page: the title alone at the centre of the screen (where
+             the background clock's centre is), the details at the bottom. */
+          <div class="titlepage">
+            <div class="tp-center">
+              <h1 class="sr-only">{title}</h1>
+              <TitleCipher />
+            </div>
+            <div class="tp-bottom">
+              <p class="nv-caps label">{chapterLabel}</p>
+              {hook && <p class="tp-hook">{hook}</p>}
+              <p class="meta">
+                {kind}{year && <> &middot; {year}</>} &middot; {STATUS_LABEL[status]}
+              </p>
+              <p class="descend-cue tp-cue nv-caps" aria-hidden="true">
+                Scroll <span>&darr;</span>
+              </p>
+            </div>
+          </div>
+        )
+      }
+      <div
+        class:list={["hero", { "has-cover": cover, "is-tall": descent, "is-landscape": landscape }]}
+        hidden={!!titleArt}
+      >
+        {
+          cover && (
+            <figure class="book">
+              <Image
+                src={cover}
+                alt={`Cover of ${title}`}
+                widths={[360, 540, 760, 995, 1400]}
+                sizes={landscape ? "(min-width: 1000px) 960px, 92vw" : "(min-width: 900px) 480px, 78vw"}
+                loading="eager"
+                fetchpriority="high"
+                class="book-cover"
+              />
+            </figure>
+          )
+        }
+
+        <div class="titleblock">
+          <p class="nv-caps label">{chapterLabel}</p>
+          <h1>{title}</h1>
+          <p class="meta">
+            {kind}{year && <> &middot; {year}</>} &middot; {STATUS_LABEL[status]}
+          </p>
+          {/* In a descent the hook is the first line of the sequence instead. */}
+          {hook && !descent && <p class="hook">{hook}</p>}
+
+          {
+            links && links.length > 0 && (
+              <ul class="plates">
+                {links.map(l => (
+                  <li>
+                    <a
+                      href={l.url}
+                      class="plate"
+                      {...(/^https?:/.test(l.url) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    >
+                      <span class="plate-label">{l.label}</span>
+                      {l.note && (
+                        <span class="plate-note">
+                          {l.note} {/^https?:/.test(l.url) ? "↗" : "›"}
+                        </span>
+                      )}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        </div>
+
+        {
+          descent && (
+            <p class="descend-cue nv-caps" aria-hidden="true">
+              Descend <span>&darr;</span>
+            </p>
+          )
+        }
+      </div>
+
+      {!descent && cover && <p class="ornament" aria-hidden="true">⁂</p>}
+
+      {
+        descent ? (
+          <div class="beats" data-beats>
+            {hook && <p>{hook}</p>}
+            <Content />
+          </div>
+        ) : (
+          <div class="chapter-text">
+            <Content />
+          </div>
+        )
+      }
+    </article>
+
+    {
+      descent && (
+        <>
+          {/* Past the text the page keeps sinking to black, ending at the
+              small light from the bottom of the cover. */}
+          <div class="abyss">
+            <div class="sub-light" aria-hidden="true" />
+            {finale && <p class="finale" data-beat-finale>{finale}</p>}
+          </div>
+          <p class="depth nv-caps" aria-hidden="true" data-depth>
+            <span>Depth</span>
+            <span data-depth-value>0 m</span>
+          </p>
+        </>
+      )
+    }
+
+    <!-- The end of the chapter: on to the next one (the way back is the
+         running head link at the top, and Esc). -->
+    <footer class="chapter-end">
+      {
+        next && (
+          <a class="nv-caps next-chapter" href={`/portfolio/narrative/${next.id}`} data-fade>
+            Next: {roman(chapter + 1)}. <em>{next.title}</em> &rsaquo;
+          </a>
+        )
+      }
+    </footer>
+  </div>
+</NarrativeShell>
+
+<script>
+  // Depth gauge: maps scroll progress to metres. The last stretch goes past
+  // the Challenger Deep (10,935 m), "past the deepest point anyone has ever
+  // reached".
+  const MAX_DEPTH = 11034;
+
+  function initDepth() {
+    const gauge = document.querySelector<HTMLElement>("[data-depth-value]");
+    if (!gauge || gauge.dataset.depthInit) return;
+    gauge.dataset.depthInit = "true";
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const max = document.documentElement.scrollHeight - innerHeight;
+      const t = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
+      // Eased, so the numbers race through the shallows and slow down deep.
+      const depth = Math.round((MAX_DEPTH * Math.pow(t, 1.6)) / 10) * 10;
+      gauge.textContent = `${(t >= 0.999 ? MAX_DEPTH : depth).toLocaleString("en-US")} m`;
+      // Bottom of the page: the message has arrived, whatever the observer says.
+      if (t >= 0.97) {
+        document.querySelector("[data-beat-finale]")?.classList.add("is-seen");
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const controller = new AbortController();
+    addEventListener("scroll", onScroll, { passive: true, signal: controller.signal });
+    addEventListener("resize", onScroll, { passive: true, signal: controller.signal });
+    document.addEventListener("astro:before-swap", () => controller.abort(), { once: true });
+    update();
+  }
+
+  // Each line of the descent fades in as it scrolls into view. Without JS
+  // (or with reduced motion) they're simply all visible.
+  function initBeats() {
+    const container = document.querySelector<HTMLElement>("[data-beats]");
+    if (!container || container.dataset.beatsInit) return;
+    container.dataset.beatsInit = "true";
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const reveal = (rootMargin: string, threshold: number) => {
+      const io = new IntersectionObserver(
+        entries => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              e.target.classList.add("is-seen");
+              io.unobserve(e.target);
+            }
+          }
+        },
+        { rootMargin, threshold }
+      );
+      document.addEventListener("astro:before-swap", () => io.disconnect(), { once: true });
+      return io;
+    };
+    // Lines wait until they're 30% up the screen, so each has a moment alone.
+    const lineIO = reveal("0px 0px -30% 0px", 0);
+    [...container.children].forEach(l => {
+      l.classList.add("beat-hidden");
+      lineIO.observe(l);
+    });
+    // The finale sits at the very bottom of the page and can never scroll
+    // 30% up, so it appears once it's half on screen. (Not "fully": mobile
+    // browsers often report 99.9% because of fractional pixels and the
+    // collapsing address bar, which left it hidden forever.) The depth
+    // gauge also reveals it when you hit the bottom, as a backstop.
+    const finaleIO = reveal("0px", 0.5);
+    document.querySelectorAll("[data-beat-finale]").forEach(f => {
+      f.classList.add("beat-hidden", "beat-slow");
+      finaleIO.observe(f);
+    });
+  }
+
+  initDepth();
+  initBeats();
+  // Leaving a chapter for the contents: leave a note so the contents page
+  // puts its cursor back on this chapter.
+  document.addEventListener("astro:before-swap", e => {
+    const from = e.from.pathname.replace(/\/+$/, "");
+    const to = e.to.pathname.replace(/\/+$/, "");
+    if (/^\/portfolio\/narrative\/[^/]+$/.test(from) && to === "/portfolio/narrative") {
+      try {
+        sessionStorage.setItem("pageBack", from.split("/").pop()!);
+      } catch {}
+    }
+  });
+
+  document.addEventListener("astro:page-load", () => {
+    initDepth();
+    initBeats();
+  });
+</script>
+
+<style>
+  .chapter {
+    position: relative;
+    min-height: 100svh;
+    color: var(--nv-ink);
+    background: linear-gradient(var(--nv-top), var(--nv-bottom));
+    /* Own stacking context, so background art (z-index: -1) sits above
+       this gradient but below the text. */
+    isolation: isolate;
+  }
+
+  /* Centred column via grid tracks (gutters either side, content in the
+     middle) rather than auto margins; full-bleed parts span all three. */
+  .chapter {
+    --gutter: 1.25rem;
+    display: grid;
+    grid-template-columns:
+      minmax(var(--gutter), 1fr)
+      min(1200px, 100% - 2 * var(--gutter))
+      minmax(var(--gutter), 1fr);
+    align-content: start;
+    width: 100%;
+  }
+  @media (min-width: 640px) {
+    .chapter {
+      --gutter: 2.5rem;
+    }
+  }
+  .chapter > :global(*) {
+    grid-column: 2;
+  }
+  .chapter > .abyss {
+    grid-column: 1 / -1;
+  }
+
+  .runhead {
+    display: flex;
+    padding-top: 1.5rem;
+    color: var(--nv-muted);
+  }
+  .back {
+    text-decoration: none;
+    padding: 0.35em 0;
+  }
+  .back:hover {
+    color: var(--nv-accent);
+  }
+
+  /* ── hero: cover + title block ─────────────────────────── */
+  .hero {
+    position: relative;
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+    justify-items: center;
+    padding-block: 2.5rem 4rem;
+    text-align: center;
+  }
+  /* Phones: the cover is nearly screen-wide and its glow reaches past it,
+     which made the page wider than the screen. Clip it to the hero (it
+     has faded to nothing by the edge anyway). */
+  @media (max-width: 899px) {
+    .hero {
+      overflow-x: clip;
+    }
+  }
+  /* A descent opens on one full screen: cover + title, then "Descend". */
+  .hero.is-tall {
+    min-height: calc(100svh - 4rem);
+  }
+  @media (min-width: 900px) {
+    .hero.has-cover {
+      grid-template-columns: auto minmax(0, 34rem);
+      justify-content: center;
+      justify-items: start;
+      gap: clamp(3rem, 6vw, 6rem);
+      padding-block: 2rem 5rem;
+      text-align: left;
+    }
+  }
+
+  /* The cover as a physical book: slight turn, a spine highlight, a soft
+     glow behind it so it lifts off the page colour, and a cast shadow. */
+  .book {
+    position: relative;
+    margin: 0;
+    perspective: 1600px;
+  }
+  .book::before {
+    content: "";
+    position: absolute;
+    inset: 8% -18%;
+    z-index: -1;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--nv-accent) 22%, transparent),
+      transparent
+    );
+    filter: blur(20px);
+  }
+  .book-cover {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: min(78vw, 360px);
+    transform: rotateY(9deg);
+    transform-origin: left center;
+    border-radius: 1px 3px 3px 1px;
+    box-shadow:
+      inset 4px 0 6px -3px rgb(255 255 255 / 0.25),
+      -1px 0 0 rgb(255 255 255 / 0.08),
+      18px 24px 40px -14px rgb(0 0 0 / 0.75);
+    transition: transform 0.6s ease;
+  }
+  .book:hover .book-cover {
+    transform: rotateY(3deg);
+  }
+  @media (min-width: 900px) {
+    .book-cover {
+      max-width: none;
+      height: clamp(420px, 76svh, 760px);
+    }
+  }
+
+  /* ── title page (chapters with titleArt) ─────────────────── */
+  /* Fixed-height running head, so the title page can slide up under it
+     and fill exactly one screen: its centre is the viewport's centre. */
+  .runhead {
+    position: relative;
+    z-index: 2;
+    height: 3.75rem;
+    box-sizing: border-box;
+  }
+  .hero[hidden] {
+    display: none;
+  }
+  .titlepage {
+    display: grid;
+    grid-template-rows: 1fr auto 1fr;
+    min-height: 100svh;
+    margin-top: -3.75rem;
+    text-align: center;
+  }
+  .tp-center {
+    grid-row: 2;
+  }
+  .tp-center :global(.cipher) {
+    font-size: clamp(5.5rem, 20vw, 12rem);
+  }
+  .tp-bottom {
+    grid-row: 3;
+    align-self: end;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 1.5rem;
+  }
+  .tp-bottom .label {
+    margin: 0;
+  }
+  .tp-hook {
+    max-width: 30rem;
+    margin: 0;
+    font-family: var(--nv-display);
+    font-size: 1.35em;
+    font-style: italic;
+    line-height: 1.35;
+  }
+  .tp-bottom .meta {
+    margin: 0;
+    font-size: 0.85em;
+  }
+  .tp-cue {
+    position: static;
+    margin-top: 1.25rem;
+  }
+
+  /* Centred heroes (no cover, or wide key art): the hook becomes a centred
+     quote instead of a ruled block. */
+  .hero:is(:not(.has-cover), .is-landscape) .hook {
+    max-width: 34rem;
+    margin-inline: auto;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .hero:not(.has-cover) {
+    padding-block: 4rem 2rem;
+  }
+  .hero:not(.has-cover) .plates {
+    justify-content: center;
+  }
+
+  /* Landscape key art: full-width image above a centred title. */
+  .hero.is-landscape {
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: center !important;
+    text-align: center !important;
+    gap: 2.5rem;
+  }
+  .hero.is-landscape .book {
+    perspective: none;
+  }
+  .hero.is-landscape .book-cover {
+    width: 100%;
+    max-width: 960px;
+    height: auto !important;
+    transform: none !important;
+    border-radius: 2px;
+  }
+  .hero.is-landscape .plates {
+    justify-content: center;
+  }
+
+  .descend-cue {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 1.25rem;
+    margin: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--nv-muted);
+  }
+  .descend-cue span {
+    display: inline-block;
+    margin-left: 0.4em;
+    animation: cue-bob 2.4s ease-in-out infinite;
+  }
+  @keyframes cue-bob {
+    50% {
+      transform: translateY(4px);
+    }
+  }
+  @media (max-width: 899px) {
+    .descend-cue {
+      position: static;
+    }
+  }
+
+  .label {
+    margin: 0;
+    color: var(--nv-accent);
+  }
+  h1 {
+    margin: 0.35rem 0 0;
+    font-family: var(--nv-display);
+    font-size: clamp(2.5rem, 6.5vw, 4rem);
+    font-weight: 500;
+    line-height: 1.02;
+    text-wrap: balance;
+  }
+  .meta {
+    margin: 0.9rem 0 0;
+    font-style: italic;
+    color: var(--nv-muted);
+  }
+  .hook {
+    margin: 1.75rem 0 0;
+    padding-left: 1rem;
+    border-left: 2px solid var(--nv-accent);
+    font-family: var(--nv-display);
+    font-size: 1.35em;
+    font-style: italic;
+    line-height: 1.35;
+  }
+
+  /* Buy / read links as bookplates. */
+  .plates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .plate {
+    display: flex;
+    flex-direction: column;
+    min-width: 11rem;
+    padding: 0.7rem 1.1rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--nv-accent) 55%, transparent);
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  .plate:hover,
+  .plate:focus-visible {
+    background: color-mix(in srgb, var(--nv-accent) 14%, transparent);
+    border-color: var(--nv-accent);
+  }
+  .plate-label {
+    font-family: var(--nv-display);
+    font-size: 1.25em;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .plate-note {
+    font-size: 0.8em;
+    color: var(--nv-muted);
+  }
+
+  /* ── the text ──────────────────────────────────────────── */
+  .ornament {
+    margin: 4rem 0 0;
+    text-align: center;
+    font-size: 1.4em;
+    color: var(--nv-accent);
+  }
+  .chapter-text {
+    max-width: 36rem;
+    margin: 2.5rem auto 0;
+    line-height: 1.75;
+  }
+  /* "**Name.** ..." paragraphs read as entries, not running text. */
+  .chapter-text > :global(p:has(> strong:first-child)) {
+    margin-top: 0.9em;
+    text-indent: 0;
+  }
+  .chapter-text > :global(p) {
+    margin: 0;
+    text-wrap: pretty;
+  }
+  /* Screen paragraphs: a clear gap between them, no indent, no hyphenation
+     (the printed-book indent read as odd spacing on screen). */
+  .chapter-text > :global(p + p) {
+    margin-top: 1.1em;
+  }
+  .chapter-text > :global(* + p) {
+    margin-top: 1.1em;
+  }
+  .chapter-text > :global(h2 + p) {
+    margin-top: 0;
+  }
+  .chapter-text > :global(p:first-child)::first-letter {
+    float: left;
+    margin: 0.06em 0.1em 0 0;
+    font-family: var(--nv-display);
+    font-size: 3.6em;
+    line-height: 0.8;
+    color: var(--nv-accent);
+  }
+  .chapter-text > :global(h2) {
+    margin: 3.5rem 0 1.25rem;
+    font-family: var(--nv-display);
+    font-size: 1.6em;
+    font-weight: 500;
+    text-align: center;
+  }
+  .chapter-text > :global(h2:first-child) {
+    margin-top: 0;
+  }
+  /* A short accent rule under each section heading. */
+  .chapter-text > :global(h2)::after {
+    content: "";
+    display: block;
+    width: 2rem;
+    height: 1px;
+    margin: 0.6rem auto 0;
+    background: var(--nv-accent);
+    opacity: 0.6;
+  }
+  .chapter-text > :global(h2 + p)::first-letter {
+    float: none;
+    font-size: inherit;
+    margin: 0;
+    color: inherit;
+  }
+  .chapter-text :global(em) {
+    font-style: italic;
+  }
+  /* A centred lead paragraph in the display face, for short chapters where
+     one paragraph carries the page (wrap it in <div class="lead">). */
+  .chapter-text :global(.lead) {
+    max-width: 32rem;
+    margin: 0 auto;
+    font-family: var(--nv-display);
+    font-size: 1.3em;
+    line-height: 1.55;
+    text-align: center;
+  }
+  .chapter-text :global(.lead p) {
+    margin: 0;
+  }
+  .chapter-text :global(.lead p + p) {
+    margin-top: 0.9em;
+  }
+  /* A quieter aside under a lead paragraph (<p class="note">). */
+  .chapter-text :global(.lead p.note) {
+    margin-top: 1.25em;
+    font-family: var(--nv-body);
+    font-size: 0.72em;
+    font-style: italic;
+    line-height: 1.6;
+    color: var(--nv-muted);
+  }
+  /* A stacked column inside a side-by-side block (<div class="duo-col">). */
+  .chapter-text :global(.duo-col) {
+    width: 100%;
+  }
+  .chapter-text :global(.duo-col > * + *) {
+    margin-top: 1.75rem;
+  }
+  .chapter-text :global(.duo-col .lead) {
+    max-width: none;
+    font-size: 1.15em;
+  }
+  /* Whatever follows a side-by-side block gets room to breathe. */
+  .chapter-text > :global(.duo + *) {
+    margin-top: 3.5rem;
+  }
+
+  /* Side by side: a figure and a lead paragraph, for a chapter that should
+     fit on one screen (wrap both in <div class="duo">). Stacks on phones. */
+  /* Wider than the reading column, centred on it (same trick as the
+     17YA chalk wall). */
+  .chapter-text > :global(.duo) {
+    --w: min(calc(100vw - 2.5rem), 60rem);
+    width: var(--w);
+    margin-inline: calc((100% - var(--w)) / 2);
+    display: grid;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  .chapter-text > :global(.duo > *) {
+    margin: 0 auto !important;
+  }
+  @media (min-width: 900px) {
+    .chapter-text > :global(.duo) {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: clamp(2rem, 5vw, 4.5rem);
+    }
+    .chapter-text > :global(.duo .lead) {
+      text-align: left;
+    }
+  }
+  /* A one-screen chapter: tighter frame, and the content centred
+     vertically between the top link and the bottom link. (Fully :global
+     selectors: Astro doesn't rewrite :global() nested inside :has().) */
+  :global(.chapter:has(.duo)) {
+    grid-template-rows: auto 1fr auto;
+    min-height: 100svh;
+  }
+  :global(.chapter:has(.duo) .body) {
+    align-self: center;
+  }
+  :global(.chapter:has(.duo) .hero) {
+    padding-block: 0 1.5rem;
+  }
+  :global(.chapter:has(.duo) .chapter-text) {
+    margin-top: 0;
+  }
+  :global(.chapter:has(.duo) .chapter-end) {
+    padding-block: 1.25rem 1.5rem;
+  }
+  .chapter-text > :global(blockquote) {
+    margin: 2rem 0;
+    padding: 0.25rem 0 0.25rem 1.25rem;
+    border-left: 2px solid var(--nv-accent);
+    font-family: var(--nv-display);
+    font-size: 1.2em;
+    font-style: italic;
+    line-height: 1.45;
+  }
+  .chapter-text > :global(blockquote p) {
+    margin: 0;
+  }
+  .chapter-text > :global(blockquote + p) {
+    text-indent: 0;
+  }
+  .chapter-text > :global(:is(figure, details, div) + p) {
+    text-indent: 0;
+  }
+
+  /* The end: breathing room, and the way on to the next chapter. */
+  .next-chapter {
+    color: var(--nv-accent, currentColor);
+    text-decoration: none;
+    opacity: 0.85;
+  }
+  .next-chapter em {
+    font-style: italic;
+    letter-spacing: 0.04em;
+    text-transform: none;
+  }
+  .next-chapter:hover,
+  .next-chapter:focus-visible {
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .chapter-end {
+    padding-block: 3rem 2.5rem;
+    text-align: center;
+    color: var(--nv-muted);
+  }
+
+  /* ── the descent ───────────────────────────────────────── */
+  /* One line per stretch of scroll, centred, each fading in as it arrives. */
+  .beats {
+    max-width: 30rem;
+    margin: 0 auto;
+    padding-top: 6svh;
+    text-align: center;
+  }
+  .beats > :global(p) {
+    display: grid;
+    place-items: center;
+    min-height: 72svh;
+    margin: 0;
+    font-family: var(--nv-display);
+    font-size: clamp(1.5rem, 4.2vw, 2rem);
+    font-weight: 500;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  .beats > :global(p:first-child) {
+    min-height: 60svh;
+    font-style: italic;
+  }
+  :global(.beat-hidden) {
+    opacity: 0;
+    transform: translateY(1.25rem);
+    transition:
+      opacity 1.4s ease,
+      transform 1.4s ease;
+  }
+  :global(.beat-hidden.is-seen) {
+    opacity: 1;
+    transform: none;
+  }
+  /* The message takes its time arriving. */
+  :global(.beat-hidden.beat-slow) {
+    transition-duration: 2.6s;
+    transition-delay: 0.4s;
+  }
+
+  .abyss {
+    position: relative;
+    height: 95svh;
+  }
+  /* The message that arrives: the last line, under the light. */
+  .finale {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 2svh;
+    margin: 0;
+    text-align: center;
+    font-family: var(--nv-display);
+    font-size: clamp(2.25rem, 7vw, 3.25rem);
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    text-indent: 0.3em; /* re-centre after the trailing letter-spacing */
+    color: #eaf5ff;
+    text-shadow:
+      0 0 12px rgb(170 210 250 / 0.6),
+      0 0 40px rgb(120 180 240 / 0.3);
+  }
+  /* The submersible's light, as on the cover: a small bright point with a
+     faint cone of light below it. */
+  .sub-light {
+    position: absolute;
+    left: 50%;
+    bottom: 22svh;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #eaf5ff;
+    box-shadow:
+      0 0 8px 2px rgb(200 230 255 / 0.9),
+      0 0 30px 8px rgb(120 180 240 / 0.35);
+    transform: translateX(-50%);
+    animation: sub-pulse 3.2s ease-in-out infinite;
+  }
+  .sub-light::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 90px;
+    height: 120px;
+    background: radial-gradient(ellipse at 50% 0%, rgb(140 190 240 / 0.22), transparent 70%);
+    clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+    transform: translateX(-50%);
+  }
+  @keyframes sub-pulse {
+    50% {
+      opacity: 0.65;
+    }
+  }
+
+  .depth {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin: 0;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    color: var(--nv-muted);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .depth [data-depth-value] {
+    font-size: 1.2em;
+    color: var(--nv-ink);
+  }
+  @media (min-width: 900px) {
+    .depth {
+      top: 50%;
+      bottom: auto;
+      right: 2rem;
+      transform: translateY(-50%);
+    }
+  }
+
+  @media (max-width: 899px) {
+    .plates {
+      justify-content: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .book-cover {
+      transition: none;
+    }
+    .descend-cue span {
+      animation: none;
+    }
+    .sub-light {
+      animation: none;
+    }
+  }
+</style>

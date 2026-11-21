@@ -1,0 +1,54 @@
+---
+title: Black Bird
+kind: First game
+year: 2020
+tagline: My **first project**. A 1:1 clone of **Flappy Bird**, in black and white.
+clip: ./gameplay.webp
+cover: ./cover.webp
+repoUrl: https://github.com/GokulSenpai/BlackBirdRepo
+order: 6
+tools: ['Unity', 'C#', 'Shader Graph', 'GIMP', 'FL Studio']
+features:
+  - name: Player
+    items:
+      - Tap to flap
+      - Tilts up on a tap, dives as it falls
+  - name: Parallax
+    items:
+      - Object-pooled
+      - Recycled off-screen, never destroyed
+      - Scales to the screen's aspect ratio
+  - name: Observer pattern
+    items:
+      - Game events as C# events
+  - Countdown coroutine
+  - Dissolve shader (Shader Graph)
+  - High score saving
+credits:
+  - label: Art
+    value: Made in GIMP
+  - label: Icons
+    value: Flaticon
+    url: https://www.flaticon.com/
+  - label: SFX
+    value: Made in Bfxr, mixed and mastered in FL Studio 20
+  - label: Music
+    value: '"Pump" by Lost Years'
+    url: https://www.youtube.com/watch?v=uEZPvkVngzc
+---
+
+## Overview
+
+Black Bird was my first project: a 1:1 clone of Flappy Bird, redone in black and white. The goal was to learn how a complete game fits together, from input and physics to menus, scoring and sound.
+
+## How it works
+
+The bird is a Rigidbody2D. Each tap zeroes its velocity and adds an upward force, and it tilts up on the tap before easing back into a dive as it falls.
+
+The obstacles and background scroll as parallax layers built on object pooling. A fixed set of objects is spawned once at startup, moved across the screen, and recycled as soon as it leaves, instead of being destroyed and created again.
+
+Spawn positions scale with the screen's aspect ratio, so the spacing holds up on different phones.
+
+The systems talk to each other through the observer pattern. Scoring, dying, the countdown finishing and the game starting are all C# events, and the game manager, the player and the parallax layers each subscribe to the ones they need instead of holding references to each other.
+
+A coroutine runs the 3-2-1 countdown, a Shader Graph dissolve effect fades sprites in, and the high score is saved between sessions.

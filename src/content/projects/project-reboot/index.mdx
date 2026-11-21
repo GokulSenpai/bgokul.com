@@ -1,0 +1,210 @@
+---
+title: Project Reboot
+tagline: A narrative-driven ARG where real-world puzzles unlock the game.
+award: 'Winner: EA Sports Game Jam'
+accentColor: '#a8325f'
+cover: ./cover.webp
+order: 5
+---
+
+import { Image } from "astro:assets";
+import endchoice from "./endchoice.webp";
+import endchoiceResist from "./endchoice_resist.webp";
+
+## Table of contents
+
+## The idea
+
+REBOOT started from a question: what if a game could escape the screen?
+
+That was the starting point for a narrative-driven experimental experience where players investigate a fictional murder by solving puzzles in the real world. The story begins with Hekar, a government data analyst found dead under suspicious circumstances. Her death was ruled a suicide and the case was closed.
+
+But fragments of information scattered throughout the experience suggest something much larger. The investigation eventually leads to Project REBOOT, a fictional government system designed to identify and erase people considered threats to the system. What begins as a murder investigation gradually becomes a story about censorship, surveillance, and what happens when people stop questioning the systems around them.
+
+---
+
+## From game to ARG
+
+REBOOT was initially designed as a seven-day ARG spanning the city of Hyderabad. Players would discover posters and QR codes around the city, travel to different locations, access fictional government portals, reconstruct corrupted timelines, follow surveillance footage, and gradually uncover Hekar's story. Each day would reveal another piece of the mystery.
+
+The intention was for players to start as investigators and finish as participants. By the end, they'd become part of the story.
+
+---
+
+## Bringing it into the real world
+
+A city-wide ARG needed locations, logistics, physical props, websites, coordination, and far more time than we had, so we changed its scale. City-wide became area-wide, then office-wide, then floor-wide. The office floor became our game world.
+
+Players could physically move through the space, interact with objects, use their phones, solve puzzles, and uncover the story around them. The smaller environment actually gave us more control over the experience: we could author where players went, what they discovered, and how one revelation led into the next.
+
+---
+
+## Designing the experience
+
+I planned the experience around an emotional arc: curiosity, immersion, paranoia, escalation, shock, closure.
+
+Each puzzle needed to progress the investigation while also changing how the player felt, so the puzzles became more than gates. Each one was designed to introduce new information, increase the player's involvement, or shift their relationship with the system.
+
+---
+
+## Puzzle 01: the dusty file
+
+The experience begins with an old, partially obscured file. The player has to blow into the microphone to clear the dust covering the document. This reveals the first piece of the investigation: a redacted file.
+
+The redacted file is also the progress bar. Each redaction represents a puzzle the player must complete to uncover another piece of the truth.
+
+<video src="/videos/project-reboot-puzzle01.webm" controls playsinline data-trailer-video class="mx-auto max-h-[70vh] w-auto max-w-full rounded border border-border bg-black" />
+
+---
+
+## Puzzle 02: reconstructing the fragment
+
+Another clue appears as a collection of fragmented letters. The player has to capture and align the letters until the hidden message becomes readable: REBOOT.
+
+When the pieces are correctly positioned, they form a symbol. This establishes the idea that the fragments scattered throughout the experience are connected.
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+<video src="/videos/project-reboot-puzzle02-walk.webm" controls playsinline data-trailer-video class="w-full h-auto rounded border border-border bg-black" />
+<video src="/videos/project-reboot-puzzle02-solve.webm" controls playsinline data-trailer-video class="w-full h-auto rounded border border-border bg-black" />
+</div>
+
+---
+
+## Puzzle 03: the hack
+
+By this point, the system knows the player is investigating. It begins actively interfering with their progress by hacking the phone and preventing them from advancing.
+
+The interaction itself is simple: the player has to press a button quickly enough to proceed. The difficulty came from finding the right timing window through playtesting. This was the first moment where the system stopped being something the player was investigating and started fighting back.
+
+<video src="/videos/project-reboot-puzzle03-stophack.webm" controls playsinline data-trailer-video class="mx-auto max-h-[70vh] w-auto max-w-full rounded border border-border bg-black" />
+
+---
+
+## Puzzle 04: imminent danger
+
+This is where the experience turns toward the player. Until now, the player has been investigating someone else's story. Now the system knows that they're investigating it.
+
+The player is identified as someone who's accessed classified information and is marked for erasure. The system sends a picture to the player as part of an official record. The player has to shake the phone to develop the picture, which switches on the front camera and reflects the player.
+
+Overlay text bleeds from top to bottom: YOU ARE NEXT TO BE ERASED.
+
+<video src="/videos/project-reboot-puzzle04-youarenext.webm" controls playsinline data-trailer-video class="mx-auto max-h-[70vh] w-auto max-w-full rounded border border-border bg-black" />
+
+---
+
+## Puzzle 05: the UV room
+
+The player enters a darkened environment and is given a UV light. Hidden markings become visible as the light moves across different surfaces. The player has to identify the relevant letters and piece them together.
+
+The player reconstructs her real name. Not Hekar.
+
+R E K H A
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+<video src="/videos/project-reboot-puzzle05-rendezook1.webm" controls playsinline data-trailer-video class="w-full h-auto rounded border border-border bg-black" />
+<video src="/videos/project-reboot-puzzle05-rendezook2.webm" controls playsinline data-trailer-video class="w-full h-auto rounded border border-border bg-black" />
+</div>
+
+---
+
+## Puzzle 06: REKHA recovered
+
+By this point, the player has recovered traces of REKHA. To complete her identity, the player has to align the two halves, one on the phone and the other on a big screen.
+
+> [!INFO] A little bit of real-world chaos
+> We got permission to use the big screen in the cafeteria for this puzzle.
+
+On completion, the truth is revealed.
+
+<video src="/videos/project-reboot-puzzle06-cafe.webm" controls playsinline data-trailer-video class="mx-auto max-h-[70vh] w-auto max-w-full rounded border border-border bg-black" />
+
+---
+
+## Puzzle 07: the choice
+
+The final interaction presents the player with two options: comply or resist.
+
+The Department presents compliance as the safe option. Rekha presents resistance as the alternative.
+
+If the audience chose comply, the player was declared erased. If they chose resist, something physical was revealed underneath the audience's chairs. Chocolate.
+
+> [!INFO] A sweet surprise
+> We taped over 200 chocolates underneath the chairs before the presentation.
+
+<Image src={endchoice} alt="Project Reboot ending screen for the COMPLY choice" width={600} height={1335} class="mx-auto max-h-[70vh] w-auto max-w-full rounded border border-border" />
+
+The final message was: there is a sweetness they cannot erase. The audience was invited to take it with them.
+
+Everyone chose to save the player. We had planned a second ending for comply, but thankfully, the audience never got to see it.
+
+The entire experience had been about a system that could erase information, identities, and people. The ending gave the audience something physical they could carry outside the experience.
+<Image src={endchoiceResist} alt="Project Reboot ending screen for the RESIST choice" width={600} height={1335} class="mx-auto max-h-[70vh] w-auto max-w-full rounded border border-border" />
+
+---
+
+## When the presentation became the game
+
+The biggest design decision came from realizing we didn't have to separate the game from its presentation. Instead of explaining REBOOT to an audience, we presented the entire experience as a classified investigation conducted by the Department of Public Trust.
+
+The presenter presented the evidence. Gameplay footage became part of the investigation. The audience became observers of the case. Then the presentation itself was interrupted.
+
+Rekha appeared.
+
+The controlled narrative began to break apart. From that point on, the audience was inside the fiction.
+
+---
+
+## When everything became the game
+
+REBOOT worked because there was no hard boundary between the game and everything surrounding it. The office became the level. The physical objects became mechanics. The presentation became the narrative. The audience became participants.
+
+Each puzzle moved the investigation forward while changing the player's relationship with what was happening around them.
+
+---
+
+## What didn't make it
+
+One idea I'd planned was to make every puzzle rely on a different human sense: breath, shake, tilt, touch, voice, rotation, physical interaction. I called these Sensory Rituals.
+
+The idea was eventually cut because of scope, but it shaped how I approached the puzzles that made it into the final experience. The remaining interactions still tried to make the player physically engage with the game.
+
+---
+
+## What I learned
+
+REBOOT taught me that the medium itself can become part of the design. A game doesn't always have to exist inside a screen; it can be everywhere around us.
+
+It also taught me how to deal with scope. The original idea was a city-wide ARG with multiple locations, websites, physical clues, timed events, and a seven-day narrative. Instead of cutting the concept down until it became unrecognizable, we changed the scale at which the idea existed.
+
+That became one of my biggest lessons from the project: when scope becomes impossible, don't immediately cut the idea. First ask whether you can change the scale at which it exists.
+
+---
+
+## Project context
+
+> [!INFO] One week game jam project
+> REBOOT was conceived and developed in roughly one week as a team project.
+>
+> The original concept was designed as a city-wide ARG across Hyderabad, but the scope evolved into a smaller physical experience we could actually execute within our available space and timeframe.
+>
+> The project went on to win the Game Jam.
+>
+> Unfortunately, the original project files were corrupted due to a power outage while I was preparing to upload the project to GitHub. We were left with an older build, which we used for the final presentation. In a fitting ending for a project called REBOOT, the project itself ended up getting erased.
+
+---
+
+## Project materials
+
+### Initial pitch
+
+The original pitch for REBOOT, showing the initial concept, ARG structure, narrative premise, and direction before the project evolved into its final physical experience.
+
+Even the pitch was designed as part of the experience. A physical puzzle was hidden in the room, and players had to find and solve it to unlock the presentation itself, giving them a small taste of what was to come.
+
+[View the initial pitch](https://docs.google.com/presentation/d/1slmN6K0nwU0CQjT6eoxTfMdRdblgF7kv/edit?usp=sharing&ouid=102101188776819319436&rtpof=true&sd=true)
+
+### Final presentation
+
+The full presentation (57 MB) contains the recorded gameplay, puzzle sequence, Department of Public Trust framing, narrative reveals, and final audience choice.
+
+[View the final presentation](https://docs.google.com/presentation/d/1q2WL4b2SJFEmkrL7hHK_Pp6sCJFoPzOf/edit?usp=sharing\&ouid=102101188776819319436\&rtpof=true\&sd=true)

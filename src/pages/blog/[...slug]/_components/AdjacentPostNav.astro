@@ -1,0 +1,91 @@
+---
+/**
+ * The next and previous entries, at the foot of a Journal entry: two
+ * pencil-boxed buttons with the entries' titles.
+ */
+import { getPostUrl } from "@/utils/getPostPaths";
+import config from "@/config";
+
+type AdjacentPost = {
+  id: string;
+  title: string;
+  filePath: string | undefined;
+} | null;
+
+type Props = {
+  prevPost: AdjacentPost;
+  nextPost: AdjacentPost;
+};
+
+const { prevPost, nextPost } = Astro.props;
+const locale = Astro.currentLocale ?? config.site.lang;
+---
+
+{
+  (prevPost || nextPost) && (
+    <nav class="nb-adjacent" data-pagefind-ignore aria-label="More entries">
+      {prevPost ? (
+        <a class="nb-adj" href={getPostUrl(prevPost.id, prevPost.filePath, locale)}>
+          <span class="nb-adj-label"><span aria-hidden="true">◀</span> Older entry</span>
+          <span class="nb-adj-title">{prevPost.title}</span>
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextPost && (
+        <a class="nb-adj is-next" href={getPostUrl(nextPost.id, nextPost.filePath, locale)}>
+          <span class="nb-adj-label">Newer entry <span aria-hidden="true">▶</span></span>
+          <span class="nb-adj-title">{nextPost.title}</span>
+        </a>
+      )}
+    </nav>
+  )
+}
+
+<style>
+  .nb-adjacent {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+  .nb-adj {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.8rem 1rem;
+    border: 2px solid #2b2724;
+    border-radius: 3px;
+    box-shadow: 3px 3px 0 rgb(43 39 36 / 0.25);
+    color: #2b2724 !important;
+    text-decoration: none;
+    transition:
+      background 0.15s,
+      transform 0.15s;
+  }
+  .nb-adj.is-next {
+    text-align: right;
+  }
+  .nb-adj:hover,
+  .nb-adj:focus-visible {
+    outline: none;
+    background: rgb(255 205 100 / 0.7);
+    transform: translate(-1px, -1px);
+  }
+  .nb-adj-label {
+    color: #6b655d;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .nb-adj-title {
+    font-family: var(--font-pixel), monospace;
+    font-size: 1rem;
+    font-variant-ligatures: none;
+  }
+  @media (max-width: 640px) {
+    .nb-adjacent {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

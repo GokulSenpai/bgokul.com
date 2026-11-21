@@ -1,0 +1,53 @@
+---
+/** The second room: each object with what it says once the disguise drops. */
+interface Props {
+  items: { object: string; line: string }[];
+}
+const { items } = Astro.props;
+---
+
+<dl class="roomb">
+  {
+    items.map(i => (
+      <div>
+        <dt>{i.object}</dt>
+        <dd>{i.line}</dd>
+      </div>
+    ))
+  }
+</dl>
+
+<style>
+  .roomb {
+    margin: 2rem 0;
+    border-top: 1px solid rgb(200 188 168 / 0.12);
+  }
+  .roomb > div {
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: baseline;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid rgb(200 188 168 / 0.12);
+  }
+  dt {
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--nv-muted);
+  }
+  dd {
+    margin: 0;
+    font-family: var(--nv-display);
+    font-size: 1.2em;
+    font-style: italic;
+    color: #f0ead8;
+  }
+  @media (max-width: 480px) {
+    .roomb > div {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.2rem;
+    }
+  }
+</style>

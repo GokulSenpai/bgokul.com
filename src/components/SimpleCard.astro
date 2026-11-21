@@ -1,0 +1,33 @@
+---
+/**
+ * A list entry (used for Breakdowns), drawn as the same small JRPG window
+ * as journal entries. Styles: .entry-* in global.css.
+ *
+ * `theme` lets one entry carry a hint of its own page's look (the way
+ * each cartridge carries its game's label), e.g. "slender". `badge` is a
+ * small tag in its corner.
+ */
+import Datetime from "./Datetime.astro";
+
+interface Props {
+  href: string;
+  title: string;
+  description: string;
+  pubDatetime?: Date;
+  variant?: "h2" | "h3";
+  theme?: string;
+  badge?: string;
+}
+
+const { href, title, description, pubDatetime, variant: Heading = "h2", theme, badge } = Astro.props;
+---
+
+<li class:list={["entry", theme && `entry--${theme}`]}>
+  <a href={href} class="entry-link" data-entry>
+    <span class="entry-cursor" aria-hidden="true">▶</span>
+    {badge && <span class="entry-badge" aria-hidden="true">{badge}</span>}
+    <Heading class="entry-title">{title}</Heading>
+    {pubDatetime && <span class="entry-date"><Datetime pubDatetime={pubDatetime} /></span>}
+    <p class="entry-desc">{description}</p>
+  </a>
+</li>

@@ -1,0 +1,969 @@
+---
+/**
+ * Full-viewport Windows-cmd shell for the Coding section.
+ *
+ * - Slot: a sequence of <CmdStep>s. Every time a page opens, each command
+ *   is typed out and its output appears after it. Any click or keypress skips straight to the end. With
+ *   reduced motion or no JS, everything is just there.
+ * - Ends with a real prompt: help, dir, cd, cls, type, start, exit…
+ */
+export interface CmdEntry {
+  name: string;
+  href?: string;
+  dir?: boolean;
+}
+
+export interface CmdCrumb {
+  label: string;
+  /** Omit for the current folder. */
+  href?: string;
+}
+
+interface Props {
+  /** Clickable path in the title bar, root first. */
+  crumbs: CmdCrumb[];
+  /** Prompt path, e.g. C:\bgokul\portfolio\coding */
+  cwd: string;
+  /** Where `cd ..` / `exit` / the close button go. */
+  parentHref: string;
+  /** What `dir` lists and `cd <name>` can open. */
+  entries: CmdEntry[];
+  /** Page highlight (project colour). Defaults to bright white. */
+  color?: string;
+}
+
+import CmdPrompt from "./CmdPrompt.astro";
+
+const { crumbs, cwd, parentHref, entries, color } = Astro.props;
+const parentLabel = crumbs.at(-2)?.label ?? "home";
+const folderCount = Math.min(9, entries.filter(e => e.dir && e.href).length);
+const config = JSON.stringify({ cwd, parentHref, entries });
+---
+
+<div
+  class="cmd-root"
+  data-cmd-root
+  data-cmd-config={config}
+  style={color ? `--cmd-hl: ${color}` : undefined}
+>
+  <script is:inline data-astro-rerun>
+    // Runs as the parser reaches it, so the "hide until typed" class is set
+    // before anything below paints. Plays on every visit.
+    // data-astro-rerun: ClientRouter skips inline scripts whose text it has
+    // already run, and this one is identical on every coding page, so
+    // without it the animation only ever played on the first page visited.
+    (function () {
+      try {
+        var root = document.currentScript.parentElement;
+        var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (!reduce) {
+          root.classList.add("cmd-anim");
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <div class="cmd-titlebar">
+    <div class="cmd-bar-inner">
+    <a href={parentHref} class="cmd-icon" title={`Back to ${parentLabel}`} aria-label={`Back to ${parentLabel}`}
+      >C:\_</a
+    >
+    <nav class="cmd-title" aria-label="Breadcrumb">
+      <ol>
+        {
+          crumbs.map(c => (
+            <li>
+              {c.href ? <a href={c.href}>{c.label}</a> : <span aria-current="page">{c.label}</span>}
+            </li>
+          ))
+        }
+      </ol>
+    </nav>
+    <span class="cmd-controls">
+      <span class="cmd-deco" aria-hidden="true">&#x2013;</span>
+      <span class="cmd-deco" aria-hidden="true">&#x25A1;</span>
+      <a href={parentHref} class="cmd-close" title={`Close (back to ${parentLabel})`} aria-label={`Close, back to ${parentLabel}`}
+        >&#x2715;</a
+      >
+    </span>
+    </div>
+  </div>
+
+  <main id="main-content" class="cmd-screen">
+    <slot />
+
+    <div class="cmd-history" data-cmd-history aria-live="polite"></div>
+
+    <p class="cmd-line cmd-input-line">
+      <CmdPrompt path={cwd} for="cmd-input" /><input
+        id="cmd-input"
+        class="cmd-input"
+        data-cmd-input
+        type="text"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="go"
+        placeholder="type help"
+      />
+    </p>
+  </main>
+
+  <!-- DOS-style key bar: the always-visible way out, and a hint that the
+       prompt above is real. -->
+  <nav class="cmd-keybar" aria-label="Shortcuts">
+    <div class="cmd-bar-inner">
+    <a href={parentHref} data-cmd-back><kbd>Esc</kbd><span>Back</span></a>
+    <button type="button" data-cmd-help><kbd>?</kbd><span>Help</span></button>
+    {folderCount > 0 && (
+      <span class="cmd-keyhint"><kbd>{folderCount > 1 ? `1-${folderCount}` : "1"}</kbd><span>Open</span></span>
+    )}
+    <a href="/"><kbd>~</kbd><span>Home</span></a>
+    <span class="cmd-skip-hint" aria-hidden="true">Click or press any key to skip</span>
+    </div>
+  </nav>
+</div>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { termOpen, termClose, glitch } from "@/components/home/bootSound";
+  import { enteredFrom, soundOn } from "@/scripts/cameFrom";
+  import { unlock } from "@/scripts/achievements";
+
+  type Entry = { name: string; href?: string; dir?: boolean };
+  type Config = { cwd: string; parentHref: string; entries: Entry[] };
+
+  const NOT_RECOGNIZED = (c: string) =>
+    `'${c}' is not recognized as an internal or external command,\noperable program or batch file.`;
+
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  const RICK_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+  // cmd's 16 console colours by `color` digit (Campbell scheme).
+  const CONSOLE: Record<string, string> = {
+    "0": "#0c0c0c", "1": "#0037da", "2": "#13a10e", "3": "#3a96dd",
+    "4": "#c50f1f", "5": "#881798", "6": "#c19c00", "7": "#cccccc",
+    "8": "#767676", "9": "#3b78ff", a: "#16c60c", b: "#61d6d6",
+    c: "#e74856", d: "#b4009e", e: "#f9f1a5", f: "#f2f2f2",
+  };
+
+  async function typeIn(root: HTMLElement) {
+    if (!root.classList.contains("cmd-anim")) return;
+    const steps = [...root.querySelectorAll<HTMLElement>("[data-cmd-step]")];
+    let skipping = false;
+    const skip = () => (skipping = true);
+    window.addEventListener("pointerdown", skip, { once: true });
+    window.addEventListener("keydown", skip, { once: true });
+    const wait = (ms: number) => (skipping ? Promise.resolve() : sleep(ms));
+
+    await wait(350);
+    for (const step of steps) {
+      const typed = step.querySelector<HTMLElement>("[data-cmd-typed]");
+      const full = typed?.textContent ?? "";
+      if (typed) typed.textContent = "";
+      step.dataset.state = "typing";
+      for (let i = 1; i <= full.length && typed; i++) {
+        if (skipping) {
+          typed.textContent = full;
+          break;
+        }
+        typed.textContent = full.slice(0, i);
+        await wait(30 + Math.random() * 45);
+      }
+      await wait(220);
+      step.dataset.state = "done";
+      await wait(120);
+    }
+    root.classList.remove("cmd-anim");
+  }
+
+  function initShell(root: HTMLElement) {
+    const input = root.querySelector<HTMLInputElement>("[data-cmd-input]");
+    const history = root.querySelector<HTMLElement>("[data-cmd-history]");
+    if (!input || !history) return;
+    const cfg: Config = JSON.parse(root.dataset.cmdConfig ?? "{}");
+    const promptHtml =
+      root.querySelector(".cmd-input-line .cmd-prompt")?.innerHTML ?? `${cfg.cwd}&gt;`;
+    const past: string[] = [];
+    let cursor = 0;
+    // Folders are numbered 1-9: press the number (or type it and Enter) to
+    // open one, like an old DOS menu. No command starts with a digit.
+    const folders = cfg.entries.filter(e => e.dir && e.href).slice(0, 9);
+    const folderAt = (key: string) => (/^[1-9]$/.test(key) ? folders[+key - 1] : undefined);
+
+    const print = (text = "", cls?: string) => {
+      const line = document.createElement("div");
+      line.className = "cmd-printed" + (cls ? " " + cls : "");
+      line.textContent = text;
+      history.append(line);
+      return line;
+    };
+    const printLink = (label: string, href: string, pad = "", newTab = false) => {
+      const line = print(pad);
+      const a = document.createElement("a");
+      a.href = href;
+      a.textContent = label;
+      if (newTab) {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      line.append(a);
+    };
+
+    // Leaving the shell (back to the console's menus) fades to black like
+    // every other exit on the site. Moving between folders inside it stays
+    // instant, like real cmd.
+    const inShell = (path: string) => /^\/portfolio\/coding(\/|$)/.test(path);
+    let leaving = false;
+    // Every action in the shell (a command run, a file or folder opened)
+    // gets the terminal's soft "enter" blip; leaving it gets the closing
+    // one. `moved` stops a command that navigates from playing both.
+    let moved = false;
+    const enterSound = () => soundOn() && termOpen();
+    const go = (href: string) => {
+      moved = true;
+      const url = new URL(href, location.href);
+      if (inShell(url.pathname)) {
+        enterSound();
+        return void navigate(href);
+      }
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        if (soundOn()) termClose();
+        return void navigate(href);
+      }
+      if (leaving) return;
+      leaving = true;
+      if (soundOn()) termClose(); // the window closing
+      document.documentElement.classList.add("sys-leaving");
+      setTimeout(() => navigate(href), 380);
+    };
+    // Links out of the shell (close, Esc Back, Home, breadcrumbs, "..")
+    // take the same fade.
+    root.addEventListener("click", e => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[href]");
+      if (!a || a.target || a.origin !== location.origin) return;
+      // A jump within this same page (#section) stays a plain jump.
+      if (a.pathname === location.pathname && a.hash) return;
+      e.preventDefault();
+      go(a.href); // inside the shell: the blip; out of it: the fade
+    });
+
+    // Runs from the Enter keypress, so it counts as a user gesture and isn't
+    // treated as a pop-up. If a blocker eats it anyway, leave a link.
+    const rickroll = () => {
+      unlock("rickroll");
+      print("Starting video . . .");
+      const tab = window.open(RICK_URL, "_blank");
+      if (tab) tab.opener = null;
+      print("");
+      print("  Never gonna give you up.", "cmd-hl");
+      print("");
+      print("(You typed 'start' where there was nothing to start. You knew.)", "cmd-dim");
+      if (!tab) printLink("Pop-up blocked. Get rickrolled manually ->", RICK_URL, "", true);
+    };
+
+    // `color XY`, as in real cmd: X = background, Y = text, one hex digit
+    // each from the 16 console colours. `color` alone resets.
+    // Deliberately lasts only for the current page, and never touches the
+    // project's own highlight colour (--cmd-hl): an earlier version carried
+    // the choice across pages and flattened every project to one colour.
+    const baseStyle = root.getAttribute("style") ?? "";
+    const html = document.documentElement;
+    const applyColor = (code: string | null) => {
+      root.setAttribute("style", baseStyle);
+      html.style.removeProperty("background");
+      if (!code) return;
+      const bg = CONSOLE[code.length === 2 ? code[0] : "0"];
+      const fg = CONSOLE[code.at(-1)!];
+      root.style.setProperty("--cmd-bg", bg);
+      root.style.setProperty("--cmd-fg", fg);
+      root.style.setProperty("--cmd-bright", fg);
+      root.style.setProperty("--cmd-dim", `color-mix(in srgb, ${fg} 65%, ${bg})`);
+      root.style.setProperty("--cmd-faint", `color-mix(in srgb, ${fg} 25%, ${bg})`);
+      html.style.background = bg;
+    };
+    // <html> survives client-side navigation, so drop any console background
+    // before the next page swaps in. Also clear the old saved choice.
+    document.addEventListener("astro:before-swap", () => html.style.removeProperty("background"), {
+      once: true,
+    });
+    try {
+      sessionStorage.removeItem("cmd-color");
+    } catch {}
+    const setColor = (arg: string) => {
+      const code = arg.toLowerCase();
+      if (!code) {
+        applyColor(null);
+        return;
+      }
+      if (!/^[0-9a-f]{1,2}$/.test(code)) {
+        print("Usage: color [attr]   e.g. 'color a' for green, 'color' to reset.");
+        print("0 Black   1 Blue    2 Green   3 Aqua    4 Red     5 Purple  6 Yellow  7 White", "cmd-dim");
+        print("8 Gray    9 L.Blue  A L.Green B L.Aqua  C L.Red   D L.Purple E L.Yellow F Bright White", "cmd-dim");
+        return;
+      }
+      const bgDigit = code.length === 2 ? code[0] : "0";
+      if (bgDigit === code.at(-1)) {
+        print("Same colour for text and background. You'd never read a thing.", "cmd-dim");
+        return;
+      }
+      applyColor(code);
+      unlock("decorator");
+    };
+
+    // Run a command with its sound: the blip, unless the command itself
+    // navigated (then go() already played the right one). An empty line
+    // isn't a command, so it's silent.
+    const exec = (raw: string) => {
+      moved = false;
+      run(raw);
+      if (raw.trim() && !moved) enterSound();
+    };
+
+    const run = (raw: string) => {
+      // Echo with the same (possibly shortened) prompt markup as the input.
+      const echo = print("", "cmd-echo");
+      const promptEl = document.createElement("span");
+      promptEl.className = "cmd-prompt";
+      promptEl.innerHTML = promptHtml;
+      echo.append(promptEl, raw);
+      echo.setAttribute("aria-hidden", "true");
+      const line = raw.trim();
+      if (!line) return;
+      const [cmdRaw, ...rest] = line.split(/\s+/);
+      const cmd = cmdRaw.toLowerCase();
+      const arg = rest.join(" ");
+      const argL = arg.toLowerCase().replace(/[\\/]+$/, "");
+
+      // Re-typing a command that's already on screen jumps back to it.
+      const existing = root.querySelector<HTMLElement>(
+        `[data-cmd-step][data-cmd="${CSS.escape(line.toLowerCase())}"]`
+      );
+      const actionable = ["dir", "cd", "cd..", "chdir", "start", "play", "cls"];
+      if (existing && !existing.hidden && !actionable.includes(cmd)) {
+        existing.scrollIntoView({ behavior: "smooth", block: "start" });
+        existing.classList.remove("cmd-flash");
+        void existing.offsetWidth;
+        existing.classList.add("cmd-flash");
+        print("(scrolled up to it)", "cmd-dim");
+        return;
+      }
+
+      const numbered = folderAt(line);
+      if (numbered?.href) return void go(numbered.href);
+
+      switch (cmd) {
+        case "help":
+        case "/?":
+          if (folders.length) print(`1-${folders.length}      Opens that folder. Just press its number.`);
+          [
+            "CD       Changes the current directory. Try 'cd ..'",
+            "CLS      Clears the screen.",
+            "COLOR    Sets the console colours. Try 'color a'.",
+            "DIR      Lists what's in this folder.",
+            "ECHO     Displays messages.",
+            "EXIT     Closes this window (back to the portfolio).",
+            "START    Plays the video.",
+            "TYPE     Displays the contents of a text file.",
+            "VER      Displays the version.",
+            "WHOAMI   Tells you who's behind this.",
+          ].forEach(l => print(l));
+          break;
+        case "dir": {
+          print(` Directory of ${cfg.cwd}`);
+          print("");
+          printLink("..", cfg.parentHref, "<DIR>          ");
+          for (const e of cfg.entries) {
+            const n = folders.indexOf(e) + 1;
+            const pad = e.dir ? `<DIR>  ${n ? `[${n}]` : "   "}    ` : "               ";
+            if (e.href) printLink(e.name, e.href, pad);
+            else print(pad + e.name);
+          }
+          break;
+        }
+        case "cd":
+        case "cd..":
+        case "chdir": {
+          const target = cmd === "cd.." ? ".." : argL;
+          // Checked on the raw argument: argL has trailing slashes stripped,
+          // which turns "\" itself into "".
+          if (/^[\\/]+$/.test(arg) || target === "~") {
+            go("/");
+          } else if (!target) {
+            print(cfg.cwd);
+          } else if (target === "..") {
+            go(cfg.parentHref);
+          } else {
+            const hit = cfg.entries.find(e => e.dir && e.name.toLowerCase() === target);
+            if (hit?.href) go(hit.href);
+            else if (hit) print("Nothing else in there. It's all on this page.");
+            else print("The system cannot find the path specified.");
+          }
+          break;
+        }
+        case "cls":
+        case "clear":
+          root.querySelectorAll<HTMLElement>("[data-cmd-clearable]").forEach(el => (el.hidden = true));
+          history.replaceChildren();
+          if (cmd === "clear") print("(that's the Linux one, but sure)", "cmd-dim");
+          window.scrollTo({ top: 0 });
+          break;
+        case "exit":
+          // Like real cmd: exit closes the whole window (leaves the shell),
+          // where cd .. only goes up one folder.
+          go("/portfolio");
+          break;
+        case "echo":
+          print(arg || "ECHO is on.");
+          break;
+        case "ver":
+          print("");
+          print("bgokul.com [Version 2026.11]");
+          break;
+        case "whoami":
+          print("bgokul\\gokul");
+          print("Game designer. Writes code when the design needs it.", "cmd-dim");
+          break;
+        case "date":
+          print("The current date is: " + new Date().toLocaleDateString("en-GB"));
+          break;
+        case "time":
+          print("The current time is: " + new Date().toLocaleTimeString("en-GB"));
+          break;
+        case "start":
+        case "play": {
+          const btn = root.querySelector<HTMLButtonElement>("[data-embed-play]");
+          if (btn) {
+            btn.scrollIntoView({ behavior: "smooth", block: "center" });
+            btn.click();
+          } else {
+            rickroll();
+          }
+          break;
+        }
+        case "curl": {
+          if (!arg) {
+            print("curl: try 'curl --help' for more information");
+          } else if (/ascii\.live\/rick|rick/i.test(arg)) {
+            print("curl: ascii.live only performs for real terminals.");
+            print("Falling back to the original . . .", "cmd-dim");
+            print("");
+            rickroll();
+          } else {
+            const host = arg.replace(/^https?:\/\//i, "").split(/[/\s]/)[0];
+            print(`curl: (6) Could not resolve host: ${host}`);
+          }
+          break;
+        }
+        case "type":
+          print(arg ? "The system cannot find the file specified." : "The syntax of the command is incorrect.");
+          break;
+        case "color":
+          setColor(arg);
+          break;
+        case "ls":
+          print(NOT_RECOGNIZED(cmdRaw));
+          print("(wrong terminal. try dir)", "cmd-dim");
+          break;
+        case "noclip":
+          // Not in `help`. Falls straight out of the world.
+          moved = true;
+          print("noclip ON");
+          if (soundOn()) glitch();
+          document.documentElement.classList.add("sys-leaving");
+          window.setTimeout(() => (location.href = "/backrooms"), 700);
+          break;
+        case "sudo":
+          unlock("sudo");
+          print(NOT_RECOGNIZED(cmdRaw));
+          print("(nice try)", "cmd-dim");
+          break;
+        default:
+          print(NOT_RECOGNIZED(cmdRaw));
+      }
+    };
+
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        const value = input.value;
+        input.value = "";
+        if (value.trim()) past.push(value);
+        cursor = past.length;
+        exec(value);
+        input.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "ArrowUp" && past.length) {
+        e.preventDefault();
+        cursor = Math.max(0, cursor - 1);
+        input.value = past[cursor];
+      } else if (e.key === "ArrowDown" && past.length) {
+        e.preventDefault();
+        cursor = Math.min(past.length, cursor + 1);
+        input.value = past[cursor] ?? "";
+      }
+    });
+
+    const runFromBar = (command: string) => {
+      exec(command);
+      input.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (matchMedia("(pointer: fine)").matches) input.focus({ preventScroll: true });
+    };
+    root
+      .querySelector("[data-cmd-help]")
+      ?.addEventListener("click", () => runFromBar("help"));
+
+    // Esc = back, ? = help. Torn down on navigation so it never fires on
+    // another page. While the intro is still typing, keys only skip it.
+    const keys = new AbortController();
+    document.addEventListener("astro:before-swap", () => keys.abort(), { once: true });
+    window.addEventListener(
+      "keydown",
+      e => {
+        if (root.classList.contains("cmd-anim")) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const inInput = document.activeElement === input;
+        const inOtherField =
+          !inInput && !!(e.target as HTMLElement).closest?.("input, textarea");
+        const numbered = folderAt(e.key);
+        if (numbered?.href && !inOtherField && !(inInput && input.value)) {
+          e.preventDefault();
+          go(numbered.href);
+          return;
+        }
+        if (e.key === "Escape") {
+          if (inOtherField) {
+            (e.target as HTMLElement).blur(); // leave a demo's field, don't leave the page
+            return;
+          }
+          if (inInput && input.value) {
+            input.value = ""; // cmd clears the line on Esc
+            return;
+          }
+          e.preventDefault();
+          go(cfg.parentHref);
+        } else if (e.key === "?" && !inInput && !(e.target as HTMLElement).closest("input, textarea")) {
+          e.preventDefault();
+          runFromBar("help");
+        }
+      },
+      { signal: keys.signal }
+    );
+
+    // Clicking empty space in the window focuses the prompt, like a real
+    // console. Desktop only, so phones don't pop the keyboard on every tap.
+    root.querySelector(".cmd-screen")?.addEventListener("click", e => {
+      const t = e.target as HTMLElement;
+      if (!matchMedia("(pointer: fine)").matches) return;
+      if (t.closest("a, button, iframe, input, [data-embed]")) return;
+      if (getSelection()?.toString()) return;
+      input.focus({ preventScroll: true });
+    });
+  }
+
+  function init() {
+    const root = document.querySelector<HTMLElement>("[data-cmd-root]");
+    if (!root || root.dataset.cmdInit) return;
+    root.dataset.cmdInit = "true";
+    // Coming into the terminal from outside it: the window pops open.
+    if (soundOn() && enteredFrom("/portfolio/coding")) termOpen();
+    initShell(root);
+    typeIn(root);
+  }
+
+  init();
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style is:global>
+  /* Registered so it resolves to px once, against the console font on
+     .cmd-root. The screen and both bars then share exactly the same edges,
+     whatever font size each bar uses for its own text. */
+  @property --cmd-col {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  /* The site forces a scrollbar on every page (overflow-y: scroll) to avoid
+     layout shift. Here: only scroll when there's overflow. No reserved
+     gutter: the full-width title/key bars would stop short of it and leave
+     a black strip down the right edge. */
+  html:has(.cmd-root) {
+    overflow-y: auto;
+    scrollbar-color: #4a4a4a #0c0c0c;
+    background: #0c0c0c;
+  }
+  body:has(.cmd-root) {
+    background: #0c0c0c;
+  }
+
+  .cmd-root {
+    /* Windows Terminal "Campbell" palette, the colours cmd actually uses. */
+    --cmd-bg: #0c0c0c;
+    --cmd-fg: #cccccc;
+    --cmd-bright: #f2f2f2;
+    --cmd-dim: #8a8a8a;
+    --cmd-faint: #3a3a3a;
+    --cmd-bar: #1f1f1f;
+    /* Per-project colour (set inline from the entry's `color`). */
+    --cmd-hl: var(--cmd-bright);
+    /* PlayableEmbed's overlay picks these up. */
+    --accent: var(--cmd-hl);
+    --accent-foreground: var(--cmd-bg);
+
+    --cmd-col: 110ch;
+    --cmd-gutter: 1rem;
+
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    background: var(--cmd-bg);
+    color: var(--cmd-fg);
+    font-family: Consolas, "Cascadia Mono", "Lucida Console", Menlo, "DejaVu Sans Mono", monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  @media (min-width: 640px) {
+    .cmd-root {
+      --cmd-gutter: 2rem;
+      font-size: 16px;
+    }
+  }
+  .cmd-root ::selection {
+    background: var(--cmd-bright);
+    color: var(--cmd-bg);
+  }
+  .cmd-root :focus-visible {
+    outline: 1px dashed var(--cmd-bright);
+    outline-offset: 2px;
+  }
+
+  /* ── title bar ─────────────────────────────────────────── */
+  /* Bars span the window; their contents sit in the text column. */
+  .cmd-bar-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: var(--cmd-col);
+    height: 100%;
+    margin-inline: auto;
+    padding-inline: var(--cmd-gutter);
+  }
+  .cmd-titlebar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 2.25rem;
+    background: var(--cmd-bar);
+    color: var(--cmd-bright);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 0.75rem;
+  }
+  .cmd-icon {
+    padding: 0.05rem 0.25rem;
+    border: 1px solid #555;
+    background: #000;
+    color: var(--cmd-bright);
+    font-family: Consolas, monospace;
+    font-size: 0.65rem;
+    text-decoration: none;
+    transition: border-color 0.12s;
+  }
+  .cmd-icon:hover {
+    border-color: var(--cmd-bright);
+  }
+  .cmd-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .cmd-title ol {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    white-space: nowrap;
+  }
+  .cmd-title li + li::before {
+    content: "\\";
+    margin: 0 0.15rem;
+    color: #777;
+  }
+  .cmd-title a {
+    color: #b5b5b5;
+    text-decoration: none;
+  }
+  .cmd-title a:hover {
+    color: var(--cmd-bright);
+    text-decoration: underline;
+  }
+  /* On phones only the last two folders fit; the rest scroll off left. */
+  @media (max-width: 639px) {
+    .cmd-title ol {
+      justify-content: flex-end;
+    }
+  }
+  .cmd-controls {
+    display: flex;
+    height: 100%;
+  }
+  .cmd-controls > * {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 100%;
+    color: var(--cmd-bright);
+    font-size: 0.8rem;
+  }
+  .cmd-deco {
+    color: #6a6a6a !important;
+    user-select: none;
+  }
+  @media (max-width: 639px) {
+    .cmd-deco {
+      display: none !important;
+    }
+  }
+  .cmd-close {
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+  .cmd-close:hover,
+  .cmd-close:focus-visible {
+    background: #c42b1c;
+    outline: none;
+  }
+
+  /* ── screen ───────────────────────────────────────────── */
+  .cmd-screen {
+    flex: 1;
+    width: 100%;
+    max-width: var(--cmd-col);
+    /* Centred column, left-aligned text: no dead right half on big screens. */
+    margin-inline: auto;
+    padding: 1rem var(--cmd-gutter) 4.5rem;
+    cursor: text;
+  }
+  @media (min-width: 640px) {
+    .cmd-screen {
+      padding-block: 1.5rem 5rem;
+    }
+  }
+  .cmd-screen p {
+    margin: 0;
+    text-wrap: pretty; /* no single orphaned word on a last line */
+  }
+  .cmd-screen a {
+    color: var(--cmd-bright);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: #555;
+  }
+  .cmd-screen a:hover {
+    text-decoration-color: currentColor;
+  }
+  .cmd-screen strong {
+    color: var(--cmd-bright);
+    font-weight: 400;
+  }
+  .cmd-dim {
+    color: var(--cmd-dim);
+  }
+  .cmd-printed.cmd-hl {
+    color: var(--cmd-hl);
+  }
+
+  /* Prompts recede so the commands and output are what you read. */
+  .cmd-prompt {
+    color: var(--cmd-dim);
+  }
+  .cmd-prompt-short {
+    display: none;
+  }
+  @media (max-width: 639px) {
+    .cmd-prompt-head {
+      display: none;
+    }
+    .cmd-prompt-short {
+      display: inline;
+    }
+  }
+  [data-cmd-typed],
+  .cmd-echo {
+    color: var(--cmd-bright);
+  }
+
+  /* A blank line between commands, the way cmd prints one. */
+  .cmd-step,
+  .cmd-history:not(:empty),
+  .cmd-input-line {
+    margin-top: 1.75em;
+  }
+  .cmd-step:first-child {
+    margin-top: 0;
+  }
+  .cmd-out {
+    margin-top: 0.35em;
+  }
+  .cmd-line,
+  .cmd-printed {
+    overflow-wrap: anywhere;
+  }
+  .cmd-printed {
+    white-space: pre-wrap;
+  }
+  .cmd-echo {
+    margin-top: 1.75em;
+  }
+  .cmd-echo:first-child {
+    margin-top: 0;
+  }
+
+  .cmd-flash {
+    animation: cmd-flash 0.9s steps(2, jump-none) 2;
+  }
+  @keyframes cmd-flash {
+    50% {
+      background: #262626;
+    }
+  }
+
+  /* ── typing animation states ──────────────────────────── */
+  .cmd-anim [data-cmd-step]:not([data-state]),
+  .cmd-anim [data-cmd-step][data-state="typing"] .cmd-out,
+  .cmd-anim .cmd-input-line {
+    display: none;
+  }
+  [data-cmd-step][data-state="typing"] [data-cmd-typed]::after {
+    content: "_";
+    animation: cmd-blink 1.05s steps(1) infinite;
+  }
+  @keyframes cmd-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  /* ── input prompt ─────────────────────────────────────── */
+  .cmd-input-line {
+    display: flex;
+    align-items: baseline;
+  }
+  .cmd-input {
+    flex: 1;
+    min-width: 4ch;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--cmd-bright);
+    font: inherit;
+    caret-color: var(--cmd-bright);
+    caret-shape: underscore;
+    outline: none !important;
+  }
+  .cmd-input::placeholder {
+    color: #4f4f4f;
+  }
+
+  /* ── key bar (DOS-style, inverted) ────────────────────── */
+  .cmd-keybar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 10;
+    height: 2.5rem;
+    background: var(--cmd-fg);
+    color: var(--cmd-bg);
+    font-family: inherit;
+    font-size: 0.875rem;
+  }
+  .cmd-keybar .cmd-bar-inner {
+    align-items: stretch;
+    gap: 0;
+  }
+  .cmd-keybar .cmd-bar-inner > a,
+  .cmd-keybar .cmd-bar-inner > button,
+  .cmd-keybar .cmd-keyhint {
+    display: flex;
+    align-items: center;
+    gap: 0.5ch;
+    padding: 0 1.25ch 0 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .cmd-keybar kbd {
+    align-self: stretch;
+    display: grid;
+    place-items: center;
+    min-width: 4.5ch;
+    padding: 0 0.75ch;
+    background: var(--cmd-bg);
+    color: var(--cmd-bright);
+    font: inherit;
+  }
+  .cmd-keybar .cmd-bar-inner > a:hover,
+  .cmd-keybar .cmd-bar-inner > button:hover,
+  .cmd-keybar .cmd-bar-inner > a:focus-visible,
+  .cmd-keybar .cmd-bar-inner > button:focus-visible {
+    background: var(--cmd-bright);
+    outline: none;
+  }
+  /* A hint, not a button. Hidden on touch screens (no number keys handy). */
+  .cmd-keybar .cmd-keyhint {
+    cursor: default;
+  }
+  @media (hover: none) {
+    .cmd-keybar .cmd-keyhint {
+      display: none;
+    }
+  }
+  .cmd-skip-hint {
+    display: none;
+    align-items: center;
+    margin-left: auto;
+    padding: 0 1.25ch;
+    color: #4a4a4a;
+  }
+  .cmd-anim .cmd-skip-hint {
+    display: flex;
+  }
+  @media (max-width: 639px) {
+    .cmd-skip-hint {
+      font-size: 0.75rem;
+    }
+    .cmd-anim .cmd-skip-hint::before {
+      content: "Tap to skip";
+    }
+    .cmd-skip-hint {
+      font-size: 0;
+    }
+    .cmd-anim .cmd-skip-hint::before {
+      font-size: 0.75rem;
+    }
+  }
+
+  /* ── things that live inside command output ───────────── */
+  .cmd-root .embed-frame {
+    max-width: 960px;
+    margin-top: 0.75rem;
+    border-radius: 0;
+    border-color: var(--cmd-faint);
+  }
+  .cmd-root .embed-play-label {
+    font-family: inherit;
+    font-weight: 400;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-cmd-step] [data-cmd-typed]::after,
+    .cmd-flash {
+      animation: none;
+    }
+  }
+</style>

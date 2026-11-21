@@ -1,0 +1,22 @@
+---
+/**
+ * A cmd prompt ("C:\bgokul\portfolio\coding>"). On narrow screens the
+ * leading folders collapse to "…\" so the prompt doesn't eat the whole
+ * line: "…\coding\CCC>". The full path stays in the DOM for wider screens.
+ */
+interface Props {
+  path: string;
+  /** Render as a <label> for the input prompt. */
+  for?: string;
+}
+
+const { path, for: htmlFor } = Astro.props;
+const parts = path.split("\\");
+const head = parts.length > 2 ? parts.slice(0, -2).join("\\") + "\\" : "";
+const tail = parts.length > 2 ? parts.slice(-2).join("\\") : path;
+const Tag = htmlFor ? "label" : "span";
+---
+
+<Tag class="cmd-prompt" for={htmlFor}
+  >{head && <span class="cmd-prompt-head">{head}</span>}{head && <span class="cmd-prompt-short" aria-hidden="true">…\</span>}{tail}&gt;</Tag
+>

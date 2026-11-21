@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#160d0d"/>
+  <rect width="1600" height="900" fill="#dc2626" opacity="0.08"/>
+  <text x="80" y="480" font-family="Georgia, serif" font-size="80" fill="#ece7e2" opacity="0.9">The Lighthouse</text>
+  <text x="80" y="530" font-family="Georgia, serif" font-size="26" fill="#c78b8b" letter-spacing="3">PROTOTYPE — PLACEHOLDER</text>
+</svg>

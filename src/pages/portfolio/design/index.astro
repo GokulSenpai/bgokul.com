@@ -1,0 +1,1903 @@
+---
+/**
+ * Design: the game library (File 01 on the save screen), styled like the
+ * main menu: pixel font, night palette, lamp-amber selection, HUD windows.
+ *  - The selected game's art fills the screen behind everything (real art,
+ *    not pixelated: the frame is pixel, the work stays sharp).
+ *  - A strip of cartridge tiles runs along the top; the selected one grows
+ *    and shows its name. Its details and a Press start button sit below.
+ *  - Hover, focus, arrow keys or a tap select; click, Enter, a second tap
+ *    or Start opens the game. Moving plays the menu's bells (sound on).
+ *  - The back window (or Esc) fades back to the save files.
+ * Without JS every tile is still a plain link to its game.
+ */
+import { getCollection } from "astro:content";
+import { Image, Font } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import GameInfo from "@/components/design/GameInfo.astro";
+import config from "@/config";
+
+// Latest to oldest, as set by each project's `order`.
+const projects = (await getCollection("projects")).sort(
+  (a, b) => a.data.order - b.data.order
+);
+
+const games = projects.map(({ id, data }) => {
+  const badges: { label: string; kind: string }[] = [];
+  if (data.featured) badges.push({ label: "★ Featured", kind: "featured" });
+  if (data.embedUrl) badges.push({ label: "▶ Playable", kind: "play" });
+  if (data.award) badges.push({ label: `🏆 ${data.award}`, kind: "award" });
+  const locked = data.status === "in-development";
+  if (locked) badges.push({ label: "◷ In development", kind: "wip" });
+  return {
+    id,
+    data,
+    locked,
+    href: `/portfolio/design/${id}`,
+    accent: data.accentColor ?? "#f4b740",
+    // The cartridge shell's tint: the game's colour, or plain plastic.
+    tint: data.accentColor ?? "#4d5288",
+    roles: data.roles?.join(" · ") ?? data.role,
+    tools: data.tools?.join(" · "),
+    badges,
+  };
+});
+const first = games[0];
+
+// Wear and tear: the newest cartridge (first) is mint; older ones are more
+// worn the older they are (--age 0..1). The next two only have scratches,
+// the middle ones a small nicked label corner, the oldest a torn corner.
+const wear = (i: number) => {
+  if (i === 0) return { cls: "", age: 0 };
+  const age = 0.3 + (0.7 * i) / Math.max(1, games.length - 1);
+  const n = games.length;
+  const tear =
+    i >= n - 3 ? (i % 2 ? "tear-tr" : "tear-bl") : i >= n - 6 && i >= 3 ? (i % 2 ? "nick-bl" : "nick-tr") : "";
+  return { cls: `worn ${tear}`.trim(), age: Number(age.toFixed(2)) };
+};
+// Scuffs: thin scratches plus a sparse speckle of chips, as a texture.
+const svg = (x: string) => `url("data:image/svg+xml,${encodeURIComponent(x)}")`;
+const scuffs = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='170'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='1' seed='3'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 10 -8.6'/></filter><rect width='100%' height='100%' filter='url(#n)'/><g stroke='white' stroke-opacity='0.45' stroke-width='0.9' fill='none' stroke-linecap='round'><path d='M12 34l46 7'/><path d='M96 18l44-9'/><path d='M30 120l28-19'/><path d='M104 140l38 4'/><path d='M70 70l22 3'/><path d='M8 92l18 14'/><path d='M120 96l14-16'/></g></svg>`
+);
+---
+
+<Layout
+  title={`Design | ${config.site.title}`}
+  description="Games I've made, in progress and out."
+>
+  <Fragment slot="head">
+    <Font cssVariable="--font-pixel" preload={[{ subset: "latin", weight: 500, style: "normal" }]} />
+  </Fragment>
+
+  <!-- Full-screen art of the selected game -->
+  <div class="backdrop" data-backdrop aria-hidden="true" style={`--sel: ${first?.accent}`}>
+    {
+      games.map((g, i) => (
+        <div class:list={["art", { "is-active": i === 0 }]} data-art={i}>
+          <Image
+            src={g.data.cover}
+            alt=""
+            width={1600}
+            height={1000}
+            fit={g.data.coverFit === "contain" ? "contain" : "cover"}
+            loading={i === 0 ? "eager" : "lazy"}
+          />
+        </div>
+      ))
+    }
+    <div class="shade"></div>
+  </div>
+
+  <main
+    id="main-content"
+    class:list={["console", { "is-locked": first?.locked }]}
+    data-console
+    style={`--sel: ${first?.accent}`}
+  >
+    <!-- HUD windows, like every other screen: the way back, and where you are. -->
+    <div class="topbar">
+      <div class="hud-left">
+        <a href="/portfolio" class="hud hud-back" data-power>
+          <span class="hud-arrow" aria-hidden="true">◀</span>
+          <span class="key kb-only" aria-hidden="true">Esc</span>
+          <span>Save files</span>
+        </a>
+        <!-- ⌂: straight to the main menu (the screen still switches off). -->
+        <a href="/" class="hud hud-back hud-home" data-power data-home title="Main menu (Home key)" aria-label="Main menu">⌂</a>
+      </div>
+      <h1 class="hud hud-name">Game library <span class="count">{games.length}</span></h1>
+    </div>
+
+    <ol class="roster" aria-label="Games" style={`--scuffs: ${scuffs}`}>
+      {
+        games.map((g, i) => (
+          <li
+            class:list={["slot", { "is-active": i === 0 }]}
+            data-slot={i}
+            data-locked={g.locked ? "" : undefined}
+            style={`--acc: ${g.accent}; --tint: ${g.tint}`}
+          >
+            <a
+              href={g.href}
+              class="slot-btn"
+              aria-current={i === 0 ? "true" : undefined}
+            >
+              <span class="cart-wrap">
+              <span class={`cart ${wear(i).cls}`} style={`--age: ${wear(i).age}`}>
+                <span class="cart-arrow" aria-hidden="true">▼</span>
+                <span class="cart-ridges" aria-hidden="true"></span>
+                <span
+                  class:list={[
+                    "slot-cover",
+                    { contain: g.data.coverFit === "contain" },
+                  ]}
+                >
+                  <Image
+                    src={g.data.cover}
+                    alt=""
+                    width={480}
+                    height={300}
+                    fit={g.data.coverFit === "contain" ? "contain" : "cover"}
+                    loading="lazy"
+                  />
+                  <span class="glint" aria-hidden="true"></span>
+                </span>
+                <span class="cart-tag" aria-hidden="true"></span>
+                <span class="cart-grip" aria-hidden="true"></span>
+                <span class="cart-pins" aria-hidden="true"></span>
+              </span>
+              </span>
+              <span class="slot-name">{g.data.title}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+
+    <!-- Phones only: a swipeable deck of cards. Neighbours peek in at the
+         edges so it's obvious there's more, and where to swipe. -->
+    <div class="deck" data-deck aria-hidden="true" style={`--scuffs: ${scuffs}`}>
+      {
+        games.map((g, i) => (
+          <a
+            href={g.href}
+            class:list={[
+              "deck-card",
+              { "is-active": i === 0, contain: g.data.coverFit === "contain" },
+            ]}
+            data-deck-card={i}
+            data-locked={g.locked ? "" : undefined}
+            style={`--acc: ${g.accent}; --tint: ${g.tint}`}
+            tabindex="-1"
+          >
+            <span class={`cart ${wear(i).cls}`} style={`--age: ${wear(i).age}`}>
+              <span class="cart-arrow">▼</span>
+              <span class="cart-ridges"></span>
+              <span class="slot-cover">
+                <Image
+                  src={g.data.cover}
+                  alt=""
+                  width={960}
+                  height={600}
+                  fit={g.data.coverFit === "contain" ? "contain" : "cover"}
+                  loading={i < 2 ? "eager" : "lazy"}
+                />
+                <span class="glint"></span>
+              </span>
+              <span class="cart-tag"></span>
+              <span class="cart-grip"></span>
+              <span class="cart-pins"></span>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+    <div class="deck-nav" aria-hidden="true">
+      <div class="dots">
+        {games.map((_, k) => <span class:list={{ on: k === 0 }} data-dot={k} />)}
+      </div>
+      <p class="swipe-hint">
+        <span class="swipe-arrow">‹</span> Swipe for more games <span class="swipe-arrow">›</span>
+      </p>
+    </div>
+
+    <div class="preview" aria-live="polite">
+      {
+        games.map((g, i) => (
+          <article
+            class:list={["pv", { "is-active": i === 0 }]}
+            data-pv={i}
+            aria-hidden={i === 0 ? undefined : "true"}
+          >
+            <h2>{g.data.title}</h2>
+            <GameInfo
+              href={g.href}
+              accent={g.accent}
+              tagline={g.data.tagline}
+              roles={g.roles}
+              tools={g.tools}
+              badges={g.badges}
+              locked={g.locked}
+            />
+          </article>
+        ))
+      }
+    </div>
+
+    <nav class="hints" aria-label="Controls">
+      <button type="button" data-prev aria-label="Previous game">
+        <span class="key">←</span><span class="hint-label">Prev</span>
+      </button>
+      <button type="button" data-next aria-label="Next game">
+        <span class="key">→</span><span class="hint-label">Next</span>
+      </button>
+      <a href={first?.href} data-open data-start class="kb-only">
+        <span class="key">Enter</span><span class="hint-label">Start</span>
+      </a>
+      <a href="/portfolio" data-power class="kb-only">
+        <span class="key">Esc</span><span class="hint-label">Back</span>
+      </a>
+    </nav>
+
+    <!-- The console the cartridge goes into when a game is started. -->
+    <div class="dock" data-dock aria-hidden="true">
+      <div class="dock-top"><span class="dock-mouth"></span></div>
+      <div class="dock-face">
+        <span class="dock-led"></span>
+        <span class="dock-name">bgokul</span>
+        <span class="dock-vents"></span>
+      </div>
+    </div>
+
+    <div class="loading" aria-hidden="true">
+      <span class="loading-text">Loading</span>
+      <span class="loading-bar">{Array.from({ length: 10 }, (_, k) => <span style={`--k:${k}`} />)}</span>
+    </div>
+  </main>
+
+  <!-- Bright CRT line for the power on/off animation -->
+  <div class="crt-glow" aria-hidden="true"></div>
+</Layout>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { wheelSelect } from "@/scripts/wheelSelect";
+  import { sfx, crtOn, crtOff } from "@/components/home/bootSound";
+
+  // The menu's bells, if the visitor has sound on (and has pressed
+  // something, so the browser allows it).
+  const soundOn = () => {
+    try {
+      return localStorage.getItem("titleSound") !== "off" && (navigator.userActivation?.hasBeenActive ?? false);
+    } catch {
+      return false;
+    }
+  };
+  const NOTES = [880, 987.77, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
+
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    const root = document.querySelector<HTMLElement>("[data-console]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+
+    // The screen switches on (every arrival plays the CRT-on picture):
+    // its sound with it.
+    if (soundOn() && !matchMedia("(prefers-reduced-motion: reduce)").matches) crtOn();
+
+    const backdrop = document.querySelector<HTMLElement>("[data-backdrop]");
+    const arts = [...document.querySelectorAll<HTMLElement>("[data-art]")];
+    const slots = [...root.querySelectorAll<HTMLElement>("[data-slot]")];
+    const links = slots.map(s => s.querySelector<HTMLAnchorElement>(".slot-btn")!);
+    const pvs = [...root.querySelectorAll<HTMLElement>("[data-pv]")];
+    const openLink = root.querySelector<HTMLAnchorElement>("[data-open]");
+    const deck = root.querySelector<HTMLElement>("[data-deck]");
+    const cards = [...root.querySelectorAll<HTMLAnchorElement>("[data-deck-card]")];
+    const dots = [...root.querySelectorAll<HTMLElement>("[data-dot]")];
+    const fine = matchMedia("(hover: hover) and (pointer: fine)");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+    let active = 0;
+    let busy = false;
+    let quiet = false; // selecting without the bell (the eject below)
+
+    function select(
+      i: number,
+      opts: { focus?: boolean; scroll?: boolean; fromDeck?: boolean } = {}
+    ) {
+      // While a cartridge is flying (into the console or back out), the
+      // shelf is frozen: hover, wheel, keys and swipes can't change the
+      // selection under the animation.
+      if (root!.classList.contains("cart-moving")) return;
+      i = (i + slots.length) % slots.length;
+      if (i !== active) {
+        active = i;
+        if (soundOn() && !quiet) sfx([NOTES[i % NOTES.length]], 0, 0.03);
+        const toggle = (els: HTMLElement[]) =>
+          els.forEach((el, k) => el.classList.toggle("is-active", k === i));
+        toggle(slots);
+        toggle(arts);
+        toggle(pvs);
+        toggle(cards);
+        dots.forEach((d, k) => d.classList.toggle("on", k === i));
+        links.forEach((a, k) =>
+          k === i ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current")
+        );
+        pvs.forEach((p, k) =>
+          k === i ? p.removeAttribute("aria-hidden") : p.setAttribute("aria-hidden", "true")
+        );
+        const acc = slots[i].style.getPropertyValue("--acc");
+        root!.style.setProperty("--sel", acc);
+        backdrop?.style.setProperty("--sel", acc);
+        if (openLink) openLink.href = links[i].href;
+        root!.classList.toggle("is-locked", slots[i].hasAttribute("data-locked"));
+      }
+      if (opts.focus) links[i].focus({ preventScroll: true });
+      if (opts.scroll) {
+        const behavior: ScrollBehavior = reduce.matches ? "auto" : "smooth";
+        // Scroll the strip/deck sideways only, never the page.
+        const roster = slots[i].parentElement!;
+        if (roster.offsetParent)
+          roster.scrollTo({
+            left: slots[i].offsetLeft - roster.clientWidth / 2 + slots[i].offsetWidth / 2,
+            behavior,
+          });
+        if (deck?.offsetParent && !opts.fromDeck) deckTo(i, behavior);
+      }
+    }
+
+    // ── Phones: the swipeable deck ──────────────────────────
+    // Scrolls the code starts (selecting, the nudge, idle mode) shouldn't
+    // re-select cards on the way past, so the scroll handler ignores them
+    // until they settle, or until a finger touches the deck.
+    let programmatic = false;
+    let progTimer = 0;
+    function deckScroll(left: number, behavior: ScrollBehavior) {
+      programmatic = true;
+      clearTimeout(progTimer);
+      // Cleared by "scrollend" when the browser supports it; the timer is a
+      // fallback long enough for a wrap-around from the last game to the first.
+      progTimer = window.setTimeout(() => (programmatic = false), behavior === "smooth" ? 1500 : 80);
+      deck!.scrollTo({ left, behavior });
+    }
+    deck?.addEventListener(
+      "scrollend",
+      () => {
+        programmatic = false;
+        clearTimeout(progTimer);
+      },
+      { signal }
+    );
+    function deckTo(i: number, behavior: ScrollBehavior) {
+      const c = cards[i];
+      deckScroll(c.offsetLeft - (deck!.clientWidth - c.offsetWidth) / 2, behavior);
+    }
+    deck?.addEventListener("touchstart", () => (programmatic = false), { signal, passive: true });
+    // Whichever card is nearest the middle is the selected game.
+    let raf = 0;
+    deck?.addEventListener(
+      "scroll",
+      () => {
+        if (programmatic) return;
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          const mid = deck!.scrollLeft + deck!.clientWidth / 2;
+          let best = 0;
+          let bestDist = Infinity;
+          cards.forEach((c, k) => {
+            const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+            if (d < bestDist) [best, bestDist] = [k, d];
+          });
+          if (best !== active) {
+            root!.dataset.dir = best > active ? "next" : "prev";
+            root!.classList.add("swiped");
+            select(best, { scroll: true, fromDeck: true });
+          }
+        });
+      },
+      { signal, passive: true }
+    );
+    // Tap a peeking card to bring it to the middle; tap the middle one to open it.
+    cards.forEach((c, i) =>
+      c.addEventListener(
+        "click",
+        e => {
+          if (!plainClick(e)) return;
+          e.preventDefault();
+          if (i !== active) select(i, { scroll: true });
+          else start(c.href);
+        },
+        { signal }
+      )
+    );
+    // On arrival, nudge the deck sideways and back once, so it reads as
+    // something you can swipe. Waits for the CRT switch-on to finish.
+    if (deck?.offsetParent && !reduce.matches) {
+      const t1 = setTimeout(() => {
+        if (root!.classList.contains("swiped")) return;
+        deckScroll(deck!.scrollLeft + 70, "smooth");
+        const t2 = setTimeout(() => deckTo(active, "smooth"), 420);
+        signal.addEventListener("abort", () => clearTimeout(t2));
+      }, 900);
+      signal.addEventListener("abort", () => clearTimeout(t1));
+    }
+
+    // Idle "attract mode": after 5s with no input, move to the next game
+    // every 5s. Any input stops it and restarts the countdown. Skipped for
+    // people who ask for reduced motion, and paused while the mouse rests
+    // over the games or the tab is in the background.
+    const IDLE_MS = 5000;
+    let idleTimer = 0;
+    function advance() {
+      const resting =
+        fine.matches && !!root!.querySelector(".roster:hover, .preview:hover");
+      if (!busy && !document.hidden && !resting) {
+        root!.classList.add("auto");
+        root!.dataset.dir = "next";
+        select(active + 1, { scroll: true });
+      }
+      idleTimer = window.setTimeout(advance, IDLE_MS);
+    }
+    function wake() {
+      root!.classList.remove("auto");
+      clearTimeout(idleTimer);
+      if (!reduce.matches) idleTimer = window.setTimeout(advance, IDLE_MS);
+    }
+    for (const type of ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"])
+      document.addEventListener(type, wake, { signal, passive: true });
+    wake();
+    signal.addEventListener("abort", () => clearTimeout(idleTimer));
+
+    // A game still in development can't be started: shake it, like a
+    // console refusing the input (and a short buzz on phones that can).
+    let denyTimer = 0;
+    function deny() {
+      root!.classList.remove("deny");
+      void root!.offsetWidth; // restart the animation
+      root!.classList.add("deny");
+      navigator.vibrate?.(40);
+      clearTimeout(denyTimer);
+      denyTimer = window.setTimeout(() => root!.classList.remove("deny"), 450);
+    }
+
+    // Opening a game: a quick "loading" flash, then the real navigation.
+    function start(href: string) {
+      if (busy || root!.classList.contains("cart-moving")) return;
+      if (slots[active].hasAttribute("data-locked")) return deny();
+      if (reduce.matches) return void navigate(href);
+      busy = true;
+      const holder = deck?.offsetParent ? cards[active] : slots[active];
+      const cart = holder.querySelector<HTMLElement>(".cart");
+      root!.classList.add("is-starting", "cart-moving");
+      if (cart) insertCartridge(cart);
+      setTimeout(() => navigate(href), 1900);
+    }
+
+    // The cartridge leaves the shelf, flies over the console that rises
+    // from the bottom, hovers, and pushes down into its slot (behind the
+    // console's front face). Then the power light comes on.
+    const dock = root.querySelector<HTMLElement>("[data-dock]")!;
+    function insertCartridge(src: HTMLElement) {
+      const r = src.getBoundingClientRect();
+      const fly = src.cloneNode(true) as HTMLElement;
+      fly.classList.add("cart-fly");
+      fly.style.setProperty("--tint", getComputedStyle(src).getPropertyValue("--tint"));
+      Object.assign(fly.style, {
+        position: "fixed",
+        left: `${r.left}px`,
+        top: `${r.top}px`,
+        width: `${r.width}px`,
+        height: `${r.height}px`,
+        // The shell's padding is in % of its container's width; out on its
+        // own the container is the whole window, so pin it in pixels.
+        padding: `${r.width * 0.13}px ${r.width * 0.08}px ${r.width * 0.3}px`,
+        margin: "0",
+        transform: "none",
+        transformOrigin: "0 0",
+      });
+      dock.append(fly);
+      src.style.visibility = "hidden";
+
+      // Where the console ends up (it sits on the bottom edge once risen).
+      const dockW = dock.offsetWidth;
+      const dockH = dock.offsetHeight;
+      const dockLeft = (innerWidth - dockW) / 2;
+      const dockTop = innerHeight - dockH;
+      const mouthW = dockW * 0.66;
+      const faceTop = dockTop + 30;
+      const s = (mouthW * 0.9) / r.width;
+      const h = r.height * s;
+      const x = dockLeft + (dockW - mouthW * 0.9) / 2 - r.left;
+      const hover = dockTop - h - 18 - r.top;
+      const inside = faceTop - h * 0.32 - r.top;
+      const at = (y: number) => `translate(${x}px, ${y}px) scale(${s})`;
+      fly.animate(
+        [
+          // Each keyframe's easing runs from it to the next one.
+          { transform: "none", offset: 0, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }, // fly over
+          { transform: at(hover), offset: 0.5, easing: "ease-in-out" }, // a small lift
+          { transform: at(hover - 6), offset: 0.62, easing: "cubic-bezier(0.55, 0, 0.8, 0.3)" }, // push in
+          { transform: at(inside), offset: 1 },
+        ],
+        // Linear overall, so each stage keeps its own easing and timing
+        // (fly up, hover, push in) instead of the whole run being squashed.
+        { duration: 1050, fill: "forwards", easing: "linear" }
+      );
+      window.setTimeout(() => {
+        dock.classList.add("is-in");
+        if (soundOn()) sfx([196, 146.83], 0.05, 0.08); // the clunk
+      }, 1000);
+      // The power light comes on silently: the clunk is the only sound.
+      window.setTimeout(() => dock.classList.add("is-on"), 1200);
+    }
+
+    // Coming back from a game: the console is already there with the
+    // cartridge in it (seen as the screen switches on). The light goes
+    // off, the cartridge pops out and flies back to its spot on the shelf,
+    // and the console sinks away. Same path as the insert, in reverse.
+    function ejectCartridge(src: HTMLElement) {
+      const r = src.getBoundingClientRect();
+      const fly = src.cloneNode(true) as HTMLElement;
+      fly.classList.add("cart-fly");
+      fly.style.setProperty("--tint", getComputedStyle(src).getPropertyValue("--tint"));
+      fly.style.visibility = "visible"; // the shelf copy is hidden; the flyer isn't
+      Object.assign(fly.style, {
+        position: "fixed",
+        left: `${r.left}px`,
+        top: `${r.top}px`,
+        width: `${r.width}px`,
+        height: `${r.height}px`,
+        padding: `${r.width * 0.13}px ${r.width * 0.08}px ${r.width * 0.3}px`,
+        margin: "0",
+        transformOrigin: "0 0",
+      });
+      const dockW = dock.offsetWidth;
+      const dockH = dock.offsetHeight;
+      const dockLeft = (innerWidth - dockW) / 2;
+      const dockTop = innerHeight - dockH;
+      const mouthW = dockW * 0.66;
+      const sc = (mouthW * 0.9) / r.width;
+      const h = r.height * sc;
+      const x = dockLeft + (dockW - mouthW * 0.9) / 2 - r.left;
+      const hover = dockTop - h - 18 - r.top;
+      const inside = dockTop + 30 - h * 0.32 - r.top;
+      // Starts fully inside (hidden behind the console's face).
+      const deep = dockTop + 32 - r.top;
+      const at = (y: number) => `translate(${x}px, ${y}px) scale(${sc})`;
+      fly.style.transform = at(deep);
+      dock.append(fly);
+      src.style.visibility = "hidden";
+
+      window.setTimeout(() => {
+        dock.classList.remove("is-on");
+        if (soundOn()) sfx([146.83, 196], 0.05, 0.07); // the release
+        const anim = fly.animate(
+          [
+            { transform: at(deep), offset: 0, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" }, // pops up
+            { transform: at(inside), offset: 0.12, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" },
+            { transform: at(hover - 6), offset: 0.3, easing: "ease-in-out" },
+            { transform: at(hover), offset: 0.42, easing: "cubic-bezier(0.5, 0, 0.2, 1)" }, // flies home
+            { transform: "none", offset: 1 },
+          ],
+          { duration: 1050, fill: "forwards", easing: "linear" }
+        );
+        window.setTimeout(() => root!.classList.remove("is-ejecting"), 480); // console sinks
+        anim.onfinish = () => {
+          root!.classList.remove("cart-moving"); // the name fades back in
+          showOnShelf(src.closest("a"));
+          fly.remove();
+          dock.classList.remove("is-in");
+        };
+      }, 200);
+    }
+
+    // Back to the save files: the console's screen switches off, the way
+    // it switched on (squeezes to a bright line, shrinks to a dot), with
+    // the CRT's falling "zwoom".
+    function powerOff(href = "/portfolio") {
+      if (busy) return;
+      if (soundOn()) crtOff();
+      if (reduce.matches) return void navigate(href);
+      busy = true;
+      document.documentElement.classList.add("console-off");
+      setTimeout(() => navigate(href), 470);
+    }
+
+    const plainClick = (e: MouseEvent) =>
+      e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
+    // Touch: the first tap on a tile selects it, a second tap opens it.
+    // Remember whether it was already selected when the finger went down,
+    // because a tap can focus (and so select) the link before the click.
+    let pending: { i: number; wasActive: boolean } | null = null;
+
+    links.forEach((a, i) => {
+      a.addEventListener("pointerenter", () => fine.matches && select(i), { signal });
+      a.addEventListener("focus", () => select(i), { signal });
+      a.addEventListener(
+        "pointerdown",
+        e => {
+          pending = e.pointerType === "mouse" ? null : { i, wasActive: active === i };
+        },
+        { signal }
+      );
+      a.addEventListener(
+        "click",
+        e => {
+          if (!plainClick(e)) return;
+          e.preventDefault();
+          const tapToSelect = pending && pending.i === i && !pending.wasActive;
+          pending = null;
+          if (tapToSelect) select(i, { scroll: true });
+          else start(a.href);
+        },
+        { signal }
+      );
+    });
+
+    root
+      .querySelectorAll<HTMLButtonElement>("button[data-locked]")
+      .forEach(b => b.addEventListener("click", deny, { signal }));
+
+    root.querySelectorAll<HTMLAnchorElement>("[data-start]").forEach(a =>
+      a.addEventListener(
+        "click",
+        e => {
+          if (!plainClick(e)) return;
+          e.preventDefault();
+          start(a.href);
+        },
+        { signal }
+      )
+    );
+    root.querySelectorAll<HTMLAnchorElement>("[data-power]").forEach(a =>
+      a.addEventListener(
+        "click",
+        e => {
+          if (!plainClick(e)) return;
+          e.preventDefault();
+          powerOff(a.href); // the save files, or ⌂ the main menu
+        },
+        { signal }
+      )
+    );
+
+    // Touch: the whole screen is a swipe area, not just the cards, so the
+    // thumb can stay at the bottom. A sideways drag anywhere moves the deck
+    // live under the finger (like a trackpad); letting go snaps to the next
+    // or previous game. Drags that start vertical are left alone, so the
+    // page still scrolls. The deck itself scrolls natively.
+    let drag: {
+      x: number;
+      y: number;
+      t: number;
+      left: number;
+      from: number;
+      axis: "h" | "v" | null;
+    } | null = null;
+    root.addEventListener(
+      "touchstart",
+      e => {
+        const t = e.target as HTMLElement;
+        if (e.touches.length !== 1 || t.closest("[data-deck]")) return void (drag = null);
+        const p = e.touches[0];
+        drag = {
+          x: p.clientX,
+          y: p.clientY,
+          t: Date.now(),
+          left: deck?.scrollLeft ?? 0,
+          from: active,
+          axis: null,
+        };
+      },
+      { signal, passive: true }
+    );
+    root.addEventListener(
+      "touchmove",
+      e => {
+        if (!drag) return;
+        const p = e.touches[0];
+        const dx = p.clientX - drag.x;
+        const dy = p.clientY - drag.y;
+        if (!drag.axis) {
+          if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+            drag.axis = "h";
+            programmatic = false;
+            root!.classList.add("swiped");
+            if (deck?.offsetParent) deck.style.scrollSnapType = "none";
+          } else if (Math.abs(dy) > 8) drag.axis = "v";
+        }
+        if (drag.axis === "h" && deck?.offsetParent) deck.scrollLeft = drag.left - dx;
+      },
+      { signal, passive: true }
+    );
+    const endDrag = (e: TouchEvent) => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      if (d.axis !== "h") return;
+      if (deck) deck.style.scrollSnapType = "";
+      const dx = e.changedTouches[0].clientX - d.x;
+      const flick = Date.now() - d.t < 300 && Math.abs(dx) > 25;
+      // A flick or a long-enough drag moves one game from where it started;
+      // otherwise settle on whichever card ended up nearest the middle.
+      let target = active;
+      if (flick || Math.abs(dx) > 60) target = d.from + (dx < 0 ? 1 : -1);
+      if (!deck?.offsetParent) target = (target + slots.length) % slots.length;
+      else target = Math.max(0, Math.min(cards.length - 1, target));
+      root!.dataset.dir = target >= d.from ? "next" : "prev";
+      select(target, { scroll: true });
+    };
+    root.addEventListener("touchend", endDrag, { signal, passive: true });
+    root.addEventListener("touchcancel", endDrag, { signal, passive: true });
+    // Taps and arrows don't slide.
+    root.addEventListener("click", () => delete root!.dataset.dir, { signal, capture: true });
+
+    root
+      .querySelector("[data-prev]")
+      ?.addEventListener("click", () => select(active - 1, { scroll: true }), { signal });
+    // The game page hides the returning cartridge (and its name label) on the
+    // shelf before this page is shown; this puts it back (both the tile
+    // and the phone card for that game).
+    function showOnShelf(a: HTMLAnchorElement | null) {
+      const href = a?.getAttribute("href");
+      if (!href) return;
+      root!.querySelectorAll<HTMLAnchorElement>(`a[href="${href}"]`).forEach(x => {
+        x.querySelectorAll<HTMLElement>(".cart").forEach(c => (c.style.visibility = ""));
+        x.querySelector<HTMLElement>(".slot-name")?.style.removeProperty("opacity");
+      });
+    }
+
+    // Back from a game? Select it and play the eject.
+    let ejectSlug: string | null = null;
+    try {
+      ejectSlug = sessionStorage.getItem("eject");
+      sessionStorage.removeItem("eject");
+    } catch {}
+    if (ejectSlug) {
+      const i = links.findIndex(a => a.pathname.replace(/\/+$/, "").endsWith(`/${ejectSlug}`));
+      if (i >= 0) {
+        quiet = true;
+        select(i, { scroll: true });
+        quiet = false;
+        if (reduce.matches) showOnShelf(links[i]);
+        else {
+          const holder = deck?.offsetParent ? cards[i] : slots[i];
+          const cart = holder.querySelector<HTMLElement>(".cart");
+          // The console is there, light on, as the screen switches on; the
+          // cartridge comes out once the switch-on (which scales the whole
+          // page, so measuring during it would be off) has finished.
+          if (cart) {
+            root.classList.add("is-ejecting", "cart-moving");
+            dock.classList.add("is-in", "is-on");
+            window.setTimeout(() => ejectCartridge(cart), 650);
+          }
+        }
+      }
+    }
+
+    // The mouse wheel moves along the shelf (down/right = next game).
+    wheelSelect(dir => select(active + dir, { focus: true, scroll: true }), signal, () => !busy);
+    root
+      .querySelector("[data-next]")
+      ?.addEventListener("click", () => select(active + 1, { scroll: true }), { signal });
+
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target as HTMLElement | null;
+        if (t?.closest("input, textarea, select, [contenteditable], dialog")) return;
+        if (document.querySelector("dialog[open]")) return;
+        switch (e.key) {
+          case "ArrowRight":
+            e.preventDefault();
+            select(active + 1, { focus: true, scroll: true });
+            break;
+          case "ArrowLeft":
+            e.preventDefault();
+            select(active - 1, { focus: true, scroll: true });
+            break;
+          case "Enter":
+            // A focused link or button already handles Enter itself.
+            if (t?.closest("a, button")) return;
+            e.preventDefault();
+            start(links[active].href);
+            break;
+          case "Escape":
+            e.preventDefault();
+            powerOff();
+            break;
+        }
+      },
+      { signal }
+    );
+
+    document.addEventListener(
+      "astro:before-swap",
+      () => {
+        document.documentElement.classList.remove("console-off");
+        ctrl?.abort();
+      },
+      { signal, once: true }
+    );
+  }
+
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  @property --sel {
+    syntax: "<color>";
+    inherits: true;
+    initial-value: #f4b740;
+  }
+
+  /* The page is the console: no site background, the art shows through. */
+  :global(html:has(.console)) {
+    background: #04050c;
+  }
+  :global(body:has(.console)) {
+    background: transparent;
+  }
+
+  /* ── backdrop: selected game's art, full screen ─────────── */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: #04050c;
+    transition: --sel 0.5s ease;
+  }
+  /* The art sits on the right and fades in from the left, so it never
+     fights the text. */
+  .art {
+    position: absolute;
+    inset: 0 0 0 28%;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%);
+    mask-image: linear-gradient(90deg, transparent, #000 45%);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .art.is-active {
+    opacity: 1;
+  }
+  .art :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.62) saturate(0.95);
+    transform: scale(1.04);
+  }
+  .art.is-active :global(img) {
+    animation: drift 18s ease-out both;
+  }
+  @keyframes drift {
+    from {
+      transform: scale(1.1);
+    }
+    to {
+      transform: scale(1.04);
+    }
+  }
+  /* Darken where the text sits (left and bottom), tint with the accent. */
+  .shade {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, #07081a 0%, rgb(7 8 26 / 0.85) 35%, rgb(7 8 26 / 0.3) 70%, rgb(7 8 26 / 0.1) 100%),
+      linear-gradient(0deg, #07081a 0%, rgb(7 8 26 / 0.6) 30%, transparent 60%),
+      linear-gradient(180deg, rgb(7 8 26 / 0.75) 0%, transparent 30%),
+      radial-gradient(ellipse 80% 70% at 75% 40%, color-mix(in srgb, var(--sel) 22%, transparent), transparent 70%);
+  }
+  /* Faint scanlines over everything */
+  .shade::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(180deg, transparent 0 2px, rgb(0 0 0 / 0.14) 2px 3px);
+  }
+
+  /* ── the screen ─────────────────────────────────────────── */
+  .console {
+    /* The main menu's palette. The selection is always lamp amber; each
+       game's own colour only tints the art behind. */
+    --acc-ui: #ffd27a;
+    --moon: #efecdc;
+    --dusk: #9aa0d6;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+    --sel-light: color-mix(in srgb, var(--sel) 70%, white);
+    /* One side padding for everything, so the edges all line up. */
+    --pad: clamp(1rem, 4vw, 4.5rem);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    color: var(--moon);
+    font-family: var(--font-pixel), ui-monospace, monospace;
+    font-variant-ligatures: none;
+    text-shadow: var(--hard);
+    width: 100%;
+    max-width: 1680px;
+    margin: 0 auto;
+    padding: clamp(1rem, 3.5vh, 2.75rem) var(--pad) clamp(0.75rem, 2.5vh, 1.75rem);
+    transition: --sel 0.5s ease;
+  }
+
+  /* ── top: two HUD windows, like every other screen ──────── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .hud {
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.88);
+    box-shadow: 3px 3px 0 rgb(3 4 14 / 0.7);
+    text-shadow: none;
+  }
+  .hud-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 40px;
+    padding: 0 0.8rem 0 0.6rem;
+    color: var(--dusk);
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+  .hud-back:hover,
+  .hud-back:focus-visible {
+    outline: none;
+    border-color: var(--acc-ui);
+    color: var(--acc-ui);
+  }
+  .hud-arrow {
+    font-size: 0.7rem;
+  }
+  .hud-left {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .hud-home {
+    justify-content: center;
+    min-width: 40px;
+    padding: 0 0.6rem;
+    font-size: 1.05rem;
+  }
+  .hud-back .key {
+    min-width: 1.8rem;
+    height: 1.45rem;
+    font-size: 0.68rem;
+  }
+  .hud-name {
+    margin: 0;
+    padding: 0.55rem 0.8rem;
+    color: var(--acc-ui);
+    font-size: 0.78rem;
+    font-weight: 400;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .count {
+    margin-left: 0.4rem;
+    color: var(--moon);
+  }
+
+  /* ── tile strip ─────────────────────────────────────────── */
+  .roster {
+    --tile: clamp(92px, 8.4vw, 150px);
+    --tile-active: clamp(150px, 14vw, 250px);
+    display: flex;
+    align-items: flex-start;
+    gap: clamp(0.5rem, 0.9vw, 0.9rem);
+    margin: clamp(1rem, 3.5vh, 2.25rem) calc(-1 * var(--pad)) 0;
+    padding: 12px var(--pad) 0.5rem;
+    scroll-padding-inline: var(--pad);
+    list-style: none;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .roster::-webkit-scrollbar {
+    display: none;
+  }
+  .slot {
+    --acc-light: color-mix(in srgb, var(--acc) 70%, white);
+    flex: 0 0 var(--tile);
+    scroll-snap-align: start;
+    transition: flex-basis 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .slot.is-active {
+    flex-basis: var(--tile-active);
+  }
+  .slot-btn {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  /* ── the cartridge ──────────────────────────────────────────
+     A navy-grey plastic shell with chamfered top corners (clip-path), grip
+     ridges along the top, grooves at the bottom and hard pixel shading.
+     The cover art sits in a recessed label. The hard drop shadow is a
+     filter on the link so it follows the chamfered shape. */
+  .cart {
+    /* Proportions (in widths, since padding % is of the width):
+       top 13%, label 84% wide at 8:5, then the title strip, grip grooves
+       and the connector tab in the bottom 30%. */
+    /* The plastic: navy-grey, with about a third of the game's own colour
+       mixed in (special-edition shells), so the shelf varies but still
+       reads as one set. (--tint comes from each game's tile.) The base is
+       a neutral dark grey, so grey games read as grey (a navy base made
+       them look blue); games without a colour tint it navy. */
+    --shell: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tint, #4d5288) 42%, #4f5059) 0%,
+      color-mix(in srgb, var(--tint, #4d5288) 42%, #3d3e46) 55%,
+      color-mix(in srgb, var(--tint, #4d5288) 42%, #32333a) 88.5%,
+      #1c1f40 88.5%
+    );
+    position: relative;
+    display: block;
+    padding: 13% 8% 30%;
+    background:
+      linear-gradient(90deg, rgb(255 255 255 / 0.12) 0 3px, transparent 3px calc(100% - 3px), rgb(0 0 0 / 0.28) calc(100% - 3px)),
+      var(--shell);
+    /* Chamfered top corners; notches at the bottom leave a narrower
+       connector tab: the silhouette that says "cartridge". */
+    clip-path: polygon(9% 0, 91% 0, 100% 5%, 100% 89%, 86% 89%, 86% 100%, 14% 100%, 14% 89%, 0 89%, 0 5%);
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* "Insert this way" arrow, embossed top left. */
+  .cart-arrow {
+    position: absolute;
+    top: 3.5%;
+    left: 11%;
+    color: rgb(10 12 36 / 0.65);
+    font-size: clamp(6px, 0.6vw, 10px);
+    line-height: 1;
+    text-shadow: 0 1px 0 rgb(255 255 255 / 0.15);
+  }
+  /* A short rib along the top edge. */
+  .cart-ridges {
+    position: absolute;
+    top: 4.5%;
+    left: 30%;
+    right: 30%;
+    height: 2.5%;
+    background: repeating-linear-gradient(90deg, rgb(10 12 36 / 0.6) 0 2px, transparent 2px 5px);
+  }
+  /* The title strip under the label: two printed lines. */
+  .cart-tag {
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: 22%;
+    height: 4.5%;
+    background:
+      linear-gradient(180deg, transparent 0 30%, rgb(20 22 50 / 0.55) 30% 45%, transparent 45% 62%, rgb(20 22 50 / 0.35) 62% 76%, transparent 76%),
+      #d9d4c4;
+    border-radius: 1px;
+  }
+  /* Grip grooves across the lower body. */
+  .cart-grip {
+    position: absolute;
+    bottom: 12.5%;
+    left: 8%;
+    right: 8%;
+    height: 7.5%;
+    background: repeating-linear-gradient(180deg, rgb(10 12 36 / 0.65) 0 2px, rgb(255 255 255 / 0.07) 2px 4px);
+  }
+  /* Gold contacts on the connector tab. */
+  .cart-pins {
+    position: absolute;
+    bottom: 1.5%;
+    left: 19%;
+    right: 19%;
+    height: 7%;
+    background: repeating-linear-gradient(90deg, #c9a24a 0 3px, #8a6a26 3px 4px, transparent 4px 6px);
+  }
+
+  /* ── wear and tear (all but the newest cartridge) ─────────────
+     Scratches and chips over shell and label, a label faded towards sepia,
+     both scaled by --age; the oldest also have a torn label corner. */
+  .cart.worn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: var(--scuffs);
+    background-size: 160px 170px;
+    background-position: calc(var(--age) * 73px) calc(var(--age) * 41px);
+    opacity: calc(var(--age) * 0.85);
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  .cart.worn .slot-cover :global(img) {
+    filter: brightness(0.7) sepia(calc(var(--age) * 0.4)) saturate(calc(1 - var(--age) * 0.25));
+  }
+  .slot.is-active .cart.worn .slot-cover :global(img),
+  .deck-card.is-active .cart.worn .slot-cover :global(img) {
+    filter: sepia(calc(var(--age) * 0.4)) saturate(calc(1 - var(--age) * 0.25));
+  }
+  /* Torn labels (the oldest cartridges). Two jagged rip lines: the label's
+     paper backing (pale) is cut along the outer one, the printed art along
+     the inner one, so a thin uneven band of white fibres shows between the
+     art and the bare plastic. A small curled flap sits at the tear. */
+  .cart:is(.tear-tr, .tear-bl, .nick-tr, .nick-bl) .slot-cover {
+    background: #e6e0cf;
+    border-color: transparent;
+  }
+  /* Nicks: a small bit of label peeled off one corner (the middle-aged ones). */
+  .cart.nick-tr .slot-cover {
+    clip-path: polygon(0 0, 88% 0, 90% 4%, 93% 3%, 95% 9%, 100% 11%, 100% 100%, 0 100%);
+  }
+  .cart.nick-tr .slot-cover :global(img) {
+    clip-path: polygon(0 0, 85% 0, 87% 6%, 90% 5%, 93% 13%, 100% 16%, 100% 100%, 0 100%);
+  }
+  .cart.nick-bl .slot-cover {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 13% 100%, 10% 96%, 7% 97%, 5% 91%, 0 89%);
+  }
+  .cart.nick-bl .slot-cover :global(img) {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 16% 100%, 13% 94%, 10% 95%, 7% 87%, 0 84%);
+  }
+  .cart.tear-tr .slot-cover {
+    clip-path: polygon(0 0, 72% 0, 75% 4%, 78% 2%, 81% 8%, 85% 7%, 87% 13%, 91% 14%, 93% 21%, 97% 22%, 100% 30%, 100% 100%, 0 100%);
+  }
+  .cart.tear-tr .slot-cover :global(img) {
+    clip-path: polygon(0 0, 67% 0, 70% 5%, 73% 3%, 77% 11%, 80% 9%, 83% 17%, 88% 17%, 90% 26%, 95% 27%, 100% 37%, 100% 100%, 0 100%);
+  }
+  .cart.tear-bl .slot-cover {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 30% 100%, 27% 96%, 23% 98%, 20% 92%, 16% 93%, 13% 87%, 9% 86%, 7% 79%, 3% 78%, 0 70%);
+  }
+  .cart.tear-bl .slot-cover :global(img) {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 35% 100%, 32% 95%, 28% 97%, 25% 89%, 20% 90%, 17% 83%, 12% 82%, 10% 74%, 5% 73%, 0 63%);
+  }
+  /* The curled flap: a small triangle of label lifting off, lit on top. */
+  .cart.tear-tr::before,
+  .cart.tear-bl::before {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    width: 7%;
+    height: 7%;
+    background: linear-gradient(135deg, #f6f1e4 0%, #d8d1bd 60%, #b3ab95 100%);
+    pointer-events: none;
+  }
+  .cart.tear-tr::before {
+    top: 15%;
+    left: 74%;
+    clip-path: polygon(0 0, 100% 35%, 30% 100%);
+  }
+  .cart.tear-bl::before {
+    top: 58%;
+    left: 15%;
+    clip-path: polygon(0 100%, 70% 0, 100% 65%);
+  }
+
+  /* Shadows and the selection outline go on a wrapper around the shell
+     only (not the name under it), since the shell's clip-path would clip
+     its own shadows. */
+  .cart-wrap {
+    display: block;
+    filter: drop-shadow(4px 4px 0 rgb(3 4 14 / 0.8));
+  }
+  .deck-card {
+    filter: drop-shadow(4px 4px 0 rgb(3 4 14 / 0.8));
+  }
+  /* The label: the cover art in a recessed window. */
+  .slot-cover {
+    display: block;
+    aspect-ratio: 8 / 5;
+    overflow: hidden;
+    border: 2px solid #15173a;
+    border-radius: 2px;
+    background: #07081a;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  }
+  /* The glint: a glossy sheen sweeping across the selected label now and
+     then, like light catching a foil sticker. */
+  .glint {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.32) 45%, rgb(255 255 255 / 0.08) 52%, transparent 60%);
+    background-size: 250% 100%;
+    background-position: 150% 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .slot.is-active .glint,
+  .deck-card.is-active .glint {
+    opacity: 1;
+    animation: glint 3.6s ease-in-out 0.3s infinite;
+  }
+  @keyframes glint {
+    0% {
+      background-position: 150% 0;
+    }
+    35%,
+    100% {
+      background-position: -60% 0;
+    }
+  }
+  .slot-cover :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.7);
+    transition: filter 0.25s ease;
+  }
+  .slot-cover.contain :global(img) {
+    object-fit: contain;
+  }
+  .slot-btn:hover .slot-cover :global(img) {
+    filter: brightness(0.9);
+  }
+  /* The one highlight: an accent ring and glow on the selected tile. */
+  /* Selected: the cartridge lifts and its shell is outlined in lamp amber. */
+  .slot.is-active .cart {
+    --shell: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tint, #4d5288) 42%, #5c5d67) 0%,
+      color-mix(in srgb, var(--tint, #4d5288) 42%, #494a53) 55%,
+      color-mix(in srgb, var(--tint, #4d5288) 42%, #3d3e47) 88.5%,
+      #22264a 88.5%
+    );
+    transform: translateY(-6px);
+  }
+  .slot.is-active .cart-wrap {
+    filter: drop-shadow(0 0 0 #ffd27a) drop-shadow(3px 0 0 #ffd27a) drop-shadow(-3px 0 0 #ffd27a) drop-shadow(0 -3px 0 #ffd27a)
+      drop-shadow(0 3px 0 #ffd27a) drop-shadow(4px 4px 0 rgb(3 4 14 / 0.8)) drop-shadow(0 0 14px rgb(255 210 122 / 0.45));
+  }
+  /* ── the console a started game's cartridge goes into ─────────
+     Rises from the bottom edge. The flying cartridge sits between its top
+     (with the slot) and its front face, so it disappears behind the face
+     as it pushes in. */
+  .dock {
+    position: fixed;
+    left: 50%;
+    bottom: -190px;
+    z-index: 60;
+    width: min(440px, 84vw);
+    height: 150px;
+    margin-left: calc(min(440px, 84vw) / -2);
+    transition: bottom 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+  .console.is-starting .dock {
+    bottom: 0;
+  }
+  /* Back from a game: the console is already in place (no rise). */
+  .console:global(.is-ejecting) .dock {
+    bottom: 0;
+    transition: none;
+  }
+  .dock-top {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 1;
+    height: 30px;
+    border: 3px solid #0b0d24;
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: linear-gradient(180deg, #5b609a, #474c82);
+  }
+  .dock-mouth {
+    position: absolute;
+    top: 8px;
+    left: 17%;
+    width: 66%;
+    height: 11px;
+    border: 2px solid #0b0d24;
+    background: #05060f;
+  }
+  .dock-face {
+    position: absolute;
+    inset: 30px 0 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0 1.4rem;
+    border: 3px solid #0b0d24;
+    border-bottom: 0;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.08) 0 3px, transparent 3px),
+      linear-gradient(180deg, #3a3f6e, #272b52);
+  }
+  .dock-led {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #0b0d24;
+    background: #3a1414;
+    transition:
+      background 0.1s,
+      box-shadow 0.2s;
+  }
+  .dock.is-on .dock-led {
+    background: #ff6f61;
+    box-shadow: 0 0 14px 3px rgb(255 111 97 / 0.6);
+  }
+  .dock-name {
+    color: rgb(239 236 220 / 0.55);
+    font-size: 0.9rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+  }
+  .dock-vents {
+    flex: 1;
+    height: 26px;
+    background: repeating-linear-gradient(180deg, rgb(5 6 20 / 0.7) 0 3px, transparent 3px 7px);
+  }
+  /* The cartridge in flight sits between the console's top and face. */
+  .dock :global(.cart-fly) {
+    z-index: 2;
+    pointer-events: none;
+    filter: drop-shadow(4px 4px 0 rgb(3 4 14 / 0.8));
+  }
+  /* A small jolt as the cartridge seats in the slot. */
+  /* (On the console's parts, not the console itself: a transform on it
+     would re-anchor the fixed cartridge inside and throw it off-screen.) */
+  .dock:global(.is-in) :is(.dock-top, .dock-face) {
+    animation: seat 0.18s ease-out;
+  }
+  @keyframes seat {
+    50% {
+      transform: translateY(3px);
+    }
+  }
+  .slot.is-active .slot-cover :global(img) {
+    filter: none;
+  }
+  /* Centred under the cartridge, lined up with its connector tab. Wider
+     names overflow evenly on both sides rather than off to one. */
+  .slot-name {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.7rem;
+    color: var(--acc-ui);
+    font-size: clamp(0.85rem, 1.05vw, 1.05rem);
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  /* While a cartridge is travelling to or from the console, its name
+     under the empty spot fades out; it fades back in once it's home. */
+  /* No hover effects on the shelf while a cartridge is in flight. */
+  .console:global(.cart-moving) :is(.slot, .deck) {
+    pointer-events: none;
+  }
+  .console:global(.cart-moving) .slot.is-active .slot-name {
+    opacity: 0;
+    transition-duration: 0.15s;
+  }
+  .slot.is-active .slot-name {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* ── selected game's details ────────────────────────────── */
+  .preview {
+    display: grid;
+    max-width: 44rem;
+    margin-top: clamp(1.75rem, 11vh, 8rem);
+  }
+  .pv {
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s;
+  }
+  .pv.is-active {
+    opacity: 1;
+    visibility: visible;
+    animation: rise 0.35s ease both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  .pv h2 {
+    margin: 0 0 1rem;
+    font-size: clamp(2rem, 4.2vw, 3.6rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+    text-shadow:
+      0.06em 0.06em 0 rgb(5 6 20 / 0.95),
+      0 0 30px rgb(0 0 0 / 0.5);
+  }
+
+  /* ── control hints ──────────────────────────────────────── */
+  .hints {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.4rem 1.1rem;
+    margin-top: auto;
+    padding-top: 2rem;
+  }
+  .hints > * {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0 0.25rem;
+    border: 0;
+    background: none;
+    color: var(--dusk);
+    font: inherit;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    text-transform: uppercase;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: color 0.2s;
+  }
+  .hints > *:hover,
+  .hints > *:focus-visible {
+    color: var(--acc-ui);
+    outline: none;
+  }
+  /* Keycaps, like the save screen's. */
+  .key {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.9rem;
+    height: 1.6rem;
+    padding: 0 0.4rem;
+    border: 2px solid rgb(154 160 214 / 0.55);
+    border-bottom-width: 4px;
+    border-radius: 3px;
+    background: rgb(12 14 42 / 0.8);
+    color: var(--moon);
+    font-size: 0.72rem;
+    text-shadow: none;
+    transition: border-color 0.2s;
+  }
+  .hints > *:hover .key,
+  .hints > *:focus-visible .key {
+    border-color: var(--acc-ui);
+  }
+  /* Touch screens have no keyboard: keep the tappable arrows, drop the
+     Enter/Esc hints (Start and the power button do those jobs). */
+  @media (hover: none), (pointer: coarse) {
+    .kb-only {
+      display: none !important;
+    }
+    .hints {
+      justify-content: center;
+    }
+  }
+
+  /* ── LOADING when a game is opened: the save screen's block bar ── */
+  .loading {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    background: #04050c;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .loading-text {
+    color: var(--acc-ui);
+    font-size: 0.9rem;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+  }
+  .loading-bar {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border: 2px solid rgb(154 160 214 / 0.6);
+  }
+  .loading-bar span {
+    width: 16px;
+    height: 10px;
+    background: var(--acc-ui);
+    opacity: 0;
+  }
+  .console.is-starting .loading {
+    animation: load-in 0.25s ease 1.35s forwards;
+  }
+  .console.is-starting .loading-bar span {
+    animation: block 0.01s linear forwards;
+    animation-delay: calc(1.45s + var(--k) * 0.04s);
+  }
+  @keyframes load-in {
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes block {
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* ── idle mode: a line fills over the 5s until the next game ── */
+  .console.auto .slot.is-active .slot-cover::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    height: 3px;
+    background: var(--acc-ui);
+    transform-origin: left;
+    animation: idle-fill 5s linear both;
+  }
+  .dots span {
+    position: relative;
+    overflow: hidden;
+  }
+  .console.auto .dots span.on {
+    background: rgb(255 255 255 / 0.28);
+  }
+  .console.auto .dots span.on::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--sel-light);
+    transform-origin: left;
+    animation: idle-fill 5s linear both;
+  }
+  @keyframes idle-fill {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  /* ── locked (in development) games ──────────────────────── */
+  .slot-cover {
+    position: relative;
+  }
+  .slot[data-locked] .slot-cover::after {
+    content: "Soon";
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    background: rgb(7 8 26 / 0.85);
+    color: var(--dusk);
+    font-size: 0.6rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .console.is-locked [data-open] {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .console.deny .slot.is-active .slot-cover,
+  .console.deny .pv.is-active :global(.start) {
+    animation: deny 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+  @keyframes deny {
+    20%,
+    60% {
+      transform: translateX(-6px);
+    }
+    40%,
+    80% {
+      transform: translateX(6px);
+    }
+  }
+
+  /* ── phones ─────────────────────────────────────────────── */
+  .deck,
+  .deck-nav {
+    display: none;
+  }
+  @media (max-width: 767.98px) {
+    .console {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+    /* Art fills the screen behind, but dimmer: the deck carries it. */
+    .art {
+      inset: 0;
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+    .art :global(img) {
+      filter: brightness(0.32) saturate(0.9);
+    }
+    /* The deck replaces the tile strip: one way to browse, not two. */
+    .roster {
+      display: none;
+    }
+
+    /* Swipeable deck. Each card is 80% wide and snaps to the middle, so
+       the previous and next cards peek in at the edges. */
+    .deck {
+      display: flex;
+      gap: 12px;
+      margin: 1.25rem calc(-1 * var(--pad)) 0;
+      padding: 8px 10vw 18px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .deck::-webkit-scrollbar {
+      display: none;
+    }
+    .deck-card {
+      --acc-light: color-mix(in srgb, var(--acc) 70%, white);
+      position: relative;
+      flex: 0 0 72vw;
+      scroll-snap-align: center;
+      scroll-snap-stop: always;
+      opacity: 0.45;
+      transform: scale(0.92);
+      transition: transform 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .deck-card.is-active {
+      opacity: 1;
+      transform: none;
+      filter: drop-shadow(3px 0 0 #ffd27a) drop-shadow(-3px 0 0 #ffd27a) drop-shadow(0 -3px 0 #ffd27a)
+        drop-shadow(0 3px 0 #ffd27a) drop-shadow(4px 4px 0 rgb(3 4 14 / 0.8));
+    }
+    .deck-card :global(img) {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .deck-card.contain :global(img) {
+      object-fit: contain;
+    }
+    .deck-card[data-locked]::after {
+      content: "Soon";
+      position: absolute;
+      top: 18%;
+      left: 13%;
+      z-index: 2;
+      padding: 0.15rem 0.5rem;
+      border-radius: 2px;
+      background: rgb(7 8 26 / 0.85);
+      color: var(--dusk);
+      font-size: 0.62rem;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .console.deny .deck-card.is-active {
+      animation: deny 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+    }
+
+    /* Dots + the swipe hint (the hint goes after the first swipe). */
+    .deck-nav {
+      display: grid;
+      justify-items: center;
+      gap: 0.5rem;
+      margin-top: 0.1rem;
+    }
+    .dots {
+      display: flex;
+      gap: 6px;
+    }
+    .dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 1px;
+      background: rgb(154 160 214 / 0.35);
+      transition: width 0.25s ease, background 0.25s ease;
+    }
+    .dots span.on {
+      width: 22px;
+      background: var(--acc-ui);
+    }
+    .swipe-hint {
+      margin: 0;
+      color: var(--dusk);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      transition: opacity 0.3s ease;
+    }
+    .swipe-arrow {
+      display: inline-block;
+      color: var(--acc-ui);
+      animation: swipe-l 1.4s ease-in-out infinite;
+    }
+    .swipe-arrow:last-child {
+      animation-name: swipe-r;
+    }
+    @keyframes swipe-l {
+      50% {
+        transform: translateX(-4px);
+      }
+    }
+    @keyframes swipe-r {
+      50% {
+        transform: translateX(4px);
+      }
+    }
+    .console.swiped .swipe-hint {
+      opacity: 0;
+    }
+
+    .preview {
+      max-width: none;
+      margin-top: 1.1rem;
+      touch-action: pan-y;
+    }
+    .pv h2 {
+      margin-bottom: 0.7rem;
+      font-size: clamp(1.7rem, 8vw, 2.2rem);
+    }
+    /* Details slide in from the side you swiped toward. */
+    .console[data-dir="next"] .pv.is-active {
+      animation: slide-next 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .console[data-dir="prev"] .pv.is-active {
+      animation: slide-prev 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    .hints {
+      display: none;
+    }
+    /* A full-width Start, easy to hit with a thumb. */
+    .pv :global(.start) {
+      display: flex;
+      width: 100%;
+      justify-content: center;
+      min-height: 52px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .deck-card,
+    .swipe-arrow,
+    .console[data-dir] .pv.is-active {
+      transition: none;
+      animation: none;
+    }
+  }
+  @keyframes slide-next {
+    from {
+      opacity: 0;
+      transform: translateX(28px);
+    }
+  }
+  @keyframes slide-prev {
+    from {
+      opacity: 0;
+      transform: translateX(-28px);
+    }
+  }
+  /* Touch screens: swipe and tap the tiles; no keyboard hints. */
+  @media (hover: none), (pointer: coarse) {
+    .hints {
+      display: none;
+    }
+  }
+
+  /* ── CRT power on / off ─────────────────────────────────────
+     Only transform and opacity are animated, so the GPU runs these at the
+     display's full refresh rate (60/120/144Hz) without repainting. The
+     bright line is a separate glow layer fading in, not a brightness
+     filter (filters repaint the whole page every frame and stutter). */
+  :global(html:has(.console) body) {
+    transform-origin: 50% 50%;
+    /* "backwards", not "both": once it has played, body keeps no transform,
+       so the fixed backdrop stays pinned to the window while scrolling. */
+    animation: crt-on 0.62s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  :global(html.console-off body) {
+    animation: crt-off 0.48s cubic-bezier(0.55, 0, 0.75, 0.2) forwards;
+  }
+  .crt-glow {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    background: radial-gradient(ellipse 60% 50% at 50% 50%, #fff, rgb(220 235 255 / 0.85) 60%, rgb(180 200 255 / 0.6));
+    opacity: 0;
+    animation: glow-on 0.62s ease-out both;
+    will-change: opacity;
+  }
+  :global(html.console-off) .crt-glow {
+    animation: glow-off 0.48s ease-in forwards;
+  }
+
+  /* On: a dot opens into a bright line, then the line opens into the screen. */
+  @keyframes crt-on {
+    0% {
+      transform: scale(0, 0.004);
+    }
+    30% {
+      transform: scale(1, 0.004);
+    }
+    100% {
+      transform: scale(1, 1);
+    }
+  }
+  @keyframes glow-on {
+    0%,
+    30% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* Off: the screen squeezes to a bright line, then shrinks to a dot. */
+  @keyframes crt-off {
+    0% {
+      transform: scale(1, 1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1, 0.004);
+      opacity: 1;
+    }
+    85% {
+      transform: scale(0.02, 0.004);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(0, 0);
+      opacity: 0;
+    }
+  }
+  @keyframes glow-off {
+    0% {
+      opacity: 0;
+    }
+    50%,
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(html:has(.console) body),
+    :global(html.console-off body),
+    .crt-glow {
+      animation: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .art,
+    .slot,
+    .pv,
+    .slot-name {
+      transition: none;
+    }
+    .art.is-active :global(img),
+    .pv.is-active {
+      animation: none;
+    }
+  }
+</style>

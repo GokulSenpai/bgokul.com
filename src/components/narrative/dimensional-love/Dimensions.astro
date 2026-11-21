@@ -1,0 +1,194 @@
+---
+/**
+ * Dimensional Love's idea, drawn: a point grows into a line (1D), a square
+ * (2D), a cube (3D) and a rotating tesseract (4D), the way her world gains
+ * dimensions as she grows. Plays when scrolled into view; tap to replay.
+ * Real 4D -> 3D -> 2D perspective projection of a hypercube, drawn as SVG.
+ * Reduced motion: the finished tesseract, still.
+ */
+---
+
+<figure class="dims" data-dims>
+  <button type="button" class="dims-stage" data-dims-replay aria-label="Replay: a point growing through four dimensions">
+    <svg viewBox="-150 -150 300 300" aria-hidden="true">
+      <g data-dims-edges></g>
+      <g data-dims-verts></g>
+    </svg>
+  </button>
+  <figcaption>
+    <span class="dims-note">A point, a line, a square, a cube, a tesseract. Tap to grow it again.</span>
+  </figcaption>
+</figure>
+
+<script>
+  const NS = "http://www.w3.org/2000/svg";
+  // The 16 corners of a hypercube: every combination of ±1 in x, y, z, w.
+  const VERTS = Array.from({ length: 16 }, (_, i) => [0, 1, 2, 3].map(b => ((i >> b) & 1 ? 1 : -1)));
+  // Edges join corners that differ in exactly one coordinate (32 of them).
+  const EDGES: [number, number][] = [];
+  for (let i = 0; i < 16; i++)
+    for (let j = i + 1; j < 16; j++) {
+      const x = i ^ j;
+      if ((x & (x - 1)) === 0) EDGES.push([i, j]);
+    }
+
+  const START = 0.5; // s before the first axis grows
+  const GROW = 1.3; // s for one axis to grow
+  const GAP = 0.45; // s pause between dimensions
+  const ease = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 3));
+
+  function initDims() {
+    document.querySelectorAll<HTMLElement>("[data-dims]").forEach(root => {
+      if (root.dataset.init) return;
+      root.dataset.init = "true";
+      const edgesG = root.querySelector("[data-dims-edges]")!;
+      const vertsG = root.querySelector("[data-dims-verts]")!;
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      const lines = EDGES.map(() => edgesG.appendChild(document.createElementNS(NS, "line")));
+      const dots = VERTS.map(() => {
+        const c = document.createElementNS(NS, "circle");
+        c.setAttribute("r", "3.2");
+        return vertsG.appendChild(c);
+      });
+
+      let t0 = 0;
+      let raf = 0;
+      let running = false;
+      // Tell the page each time a new dimension arrives (0 = a point ...
+      // 4 = a tesseract), so text like <GrowthVerse> can grow alongside.
+      let stage = -1;
+      const announce = (n: number) => {
+        if (n === stage) return;
+        stage = n;
+        document.dispatchEvent(new CustomEvent("dimlove:stage", { detail: n }));
+      };
+
+      const draw = (now: number) => {
+        const t = reduce ? 99 : (now - t0) / 1000;
+        // Growth of each axis, one after another.
+        const g = [0, 1, 2, 3].map(k => ease((t - START - k * (GROW + GAP)) / GROW));
+        // Slow rotation that only kicks in once there's depth to rotate into.
+        const a3 = t * 0.45 * g[2];
+        const a4 = t * 0.35 * g[3];
+        const pts = VERTS.map(v => {
+          let [x, y, z, w] = [v[0] * g[0], v[1] * g[1], v[2] * g[2], v[3] * g[3]];
+          // 4D rotation in the xw plane, 3D rotation in the xz and yz planes.
+          [x, w] = [x * Math.cos(a4) - w * Math.sin(a4), x * Math.sin(a4) + w * Math.cos(a4)];
+          [x, z] = [x * Math.cos(a3) - z * Math.sin(a3), x * Math.sin(a3) + z * Math.cos(a3)];
+          [y, z] = [y * Math.cos(a3 * 0.6) - z * Math.sin(a3 * 0.6), y * Math.sin(a3 * 0.6) + z * Math.cos(a3 * 0.6)];
+          // Perspective: 4D -> 3D, then 3D -> 2D.
+          const k4 = 2.2 / (3.2 - w);
+          [x, y, z] = [x * k4, y * k4, z * k4];
+          const k3 = 3 / (4.2 - z);
+          return [x * k3 * 95, y * k3 * 95, w];
+        });
+        EDGES.forEach(([i, j], n) => {
+          const l = lines[n];
+          l.setAttribute("x1", pts[i][0].toFixed(2));
+          l.setAttribute("y1", pts[i][1].toFixed(2));
+          l.setAttribute("x2", pts[j][0].toFixed(2));
+          l.setAttribute("y2", pts[j][1].toFixed(2));
+          // Edges along the 4th axis are drawn fainter, so the inner cube reads.
+          l.classList.toggle("w-edge", (i ^ j) === 8);
+        });
+        dots.forEach((d, n) => {
+          d.setAttribute("cx", pts[n][0].toFixed(2));
+          d.setAttribute("cy", pts[n][1].toFixed(2));
+        });
+        announce(g.filter(x => x > 0.5).length);
+        if (running && !reduce) raf = requestAnimationFrame(draw);
+      };
+
+      const play = () => {
+        t0 = performance.now();
+        if (!running) {
+          running = true;
+          raf = requestAnimationFrame(draw);
+        }
+      };
+      const pause = () => {
+        running = false;
+        cancelAnimationFrame(raf);
+      };
+
+      draw(performance.now()); // first frame: a single point (or the finished shape)
+      if (reduce) return;
+
+      // Start growing when it comes into view; stop drawing when it leaves.
+      let started = false;
+      const io = new IntersectionObserver(
+        ([e]) => {
+          if (e.isIntersecting) {
+            if (!started) {
+              started = true;
+              play();
+            } else if (!running) {
+              running = true;
+              raf = requestAnimationFrame(draw);
+            }
+          } else pause();
+        },
+        { threshold: 0.35 }
+      );
+      io.observe(root);
+      root.querySelector("[data-dims-replay]")!.addEventListener("click", () => {
+        started = true;
+        play();
+      });
+      document.addEventListener(
+        "astro:before-swap",
+        () => {
+          io.disconnect();
+          pause();
+        },
+        { once: true }
+      );
+    });
+  }
+  initDims();
+  document.addEventListener("astro:page-load", initDims);
+</script>
+
+<style>
+  .dims {
+    margin: 0 auto 2.5rem;
+    text-align: center;
+  }
+  .dims-stage {
+    display: block;
+    width: min(100%, 24rem, 44svh);
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    background:
+      radial-gradient(circle, color-mix(in srgb, var(--nv-accent) 10%, transparent), transparent 70%);
+    cursor: pointer;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  svg :global(line) {
+    stroke: var(--nv-accent);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+  }
+  svg :global(line.w-edge) {
+    stroke-opacity: 0.45;
+  }
+  svg :global(circle) {
+    fill: var(--nv-accent);
+  }
+  figcaption {
+    margin-top: 0.75rem;
+  }
+  .dims-note {
+    display: block;
+    font-size: 0.8em;
+    font-style: italic;
+    color: var(--nv-muted);
+  }
+</style>

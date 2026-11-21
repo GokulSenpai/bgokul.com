@@ -1,0 +1,778 @@
+---
+import { getCollection } from "astro:content";
+import { Image } from "astro:assets";
+import NarrativeShell from "@/components/narrative/NarrativeShell.astro";
+import NightScene from "@/components/home/NightScene.astro";
+import { STATUS_LABEL, roman } from "@/components/narrative/narrative";
+import config from "@/config";
+
+const entries = (await getCollection("narrative")).sort((a, b) => a.data.order - b.data.order);
+const featured = entries.find(e => e.data.featured) ?? entries[0];
+---
+
+<NarrativeShell
+  title={`Narrative | ${config.site.title}`}
+  description="Stories, poems and game writing."
+  pageBg="#04050c"
+>
+  <!-- The book lies over the main menu's scene, dimmed, under a pool of
+       lamplight: reading by lamplight in the lighthouse. -->
+  <div class="scene" aria-hidden="true">
+    <NightScene />
+    <div class="scene-dim"></div>
+  </div>
+  <div class="desk" data-book>
+    <div class="spread">
+      <!-- Left page: frontispiece (the featured work). -->
+      <section class="page verso" aria-label="Featured">
+        <header class="runhead">
+          <a href="/portfolio" class="nv-caps back" data-nv-back>&lsaquo; Save files<kbd class="nv-key">Esc</kbd></a>
+          <a href="/" class="nv-caps back nv-home" data-home title="Main menu (Home key)">⌂ Menu</a>
+        </header>
+
+        {
+          featured && (
+            <a href={`/portfolio/narrative/${featured.id}`} class="frontis" data-open data-chapter>
+              {featured.data.cover && (
+                <span class="frontis-plate">
+                  <Image
+                    src={featured.data.cover}
+                    alt={`Cover of ${featured.data.title}`}
+                    widths={[320, 480, 640]}
+                    sizes="(min-width: 900px) 360px, 70vw"
+                    loading="eager"
+                    fetchpriority="high"
+                    class="frontis-cover"
+                  />
+                </span>
+              )}
+              <span class="frontis-caption">
+                <em>{featured.data.title}</em>
+                {featured.data.year && <>, {featured.data.year}</>}
+              </span>
+              <span class="nv-caps frontis-more">
+                {STATUS_LABEL[featured.data.status]} &middot; Read &rsaquo;
+              </span>
+            </a>
+          )
+        }
+
+        <p class="folio" aria-hidden="true">ii</p>
+      </section>
+
+      <!-- Right page: title + contents. -->
+      <section class="page recto">
+        <span class="ribbon" aria-hidden="true"></span>
+        <!-- (No running head here: the title below already says Narrative.
+             An empty one keeps the two pages' tops level.) -->
+        <header class="runhead runhead-right" aria-hidden="true"><span class="nv-caps">&nbsp;</span></header>
+
+        <div class="recto-body">
+          <div class="titlepage">
+            <h1>Narrative</h1>
+            <p class="subtitle">Stories, poems and game writing.</p>
+            <p class="fleuron" aria-hidden="true">❦</p>
+          </div>
+
+          <h2 class="nv-caps contents-label">Contents</h2>
+          <ol class="toc">
+            {
+              entries.map((e, i) => (
+                <li>
+                  <a href={`/portfolio/narrative/${e.id}`} class:list={["toc-row", { "is-active": i === 0 }]} data-chapter data-open>
+                    <span class="cursor" aria-hidden="true">▶</span>
+                    <span class="toc-num">{roman(i + 1)}.</span>
+                    <span class="toc-title">{e.data.title}</span>
+                    <span class="toc-leader" aria-hidden="true" />
+                    <span class="toc-year">{e.data.year ?? ""}</span>
+                  </a>
+                  <p class="toc-meta">
+                    {e.data.kind} &middot; {STATUS_LABEL[e.data.status]}
+                  </p>
+                </li>
+              ))
+            }
+            <li class="toc-future">
+              <!-- The next chapter isn't written yet: opening it lands on the
+                   Game Over screen ("This page isn't in this world. Maybe it
+                   never was."), the one natural way there. -->
+              <a href="/portfolio/narrative/unwritten" class="toc-row" data-chapter data-open>
+                <span class="cursor" aria-hidden="true">▶</span>
+                <span class="toc-num">{roman(entries.length + 1)}.</span>
+                <span class="toc-title">More chapters being written.</span>
+              </a>
+            </li>
+          </ol>
+        </div>
+
+        <p class="folio" aria-hidden="true">iii</p>
+      </section>
+    </div>
+  </div>
+</NarrativeShell>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { wheelSelect } from "@/scripts/wheelSelect";
+  import { pageTurn, bookClose, whoosh, paperFlick } from "@/components/home/bootSound";
+
+  // Warm a chapter in the browser's cache as soon as it's selected, so it's
+  // ready when the page lands (a plain prefetch hint, no config needed).
+  const warmed = new Set<string>();
+  const prefetch = (href: string) => {
+    if (warmed.has(href)) return;
+    warmed.add(href);
+    const link = document.createElement("link");
+    link.rel = "prefetch";
+    link.href = href;
+    document.head.append(link);
+  };
+
+  let ctrl: AbortController | null = null;
+
+  // Sound only if the visitor has it on (and has pressed something).
+  const soundOn = () => {
+    try {
+      return localStorage.getItem("titleSound") !== "off" && (navigator.userActivation?.hasBeenActive ?? false);
+    } catch {
+      return false;
+    }
+  };
+
+  function init() {
+    const book = document.querySelector<HTMLElement>("[data-book]");
+    if (!book || book.dataset.ready) return;
+    book.dataset.ready = "1";
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const rows = [...book.querySelectorAll<HTMLAnchorElement>("[data-chapter]")];
+    let cur = 0;
+    let opening = false;
+
+    // The contents is a menu: a pixel ▶ cursor in the margin marks the
+    // chapter you're on. Mouse (hover), wheel and arrow keys all move it.
+    // (The featured book on the left page is the first stop, then the
+    // chapters in the contents.)
+    let ready = false; // no sound for the cursor's starting place
+    const select = (i: number, focus = false) => {
+      const next = (i + rows.length) % rows.length;
+      if (ready && next !== cur && soundOn()) paperFlick();
+      cur = next;
+      rows.forEach((r, j) => r.classList.toggle("is-active", j === cur));
+      if (focus) rows[cur].focus();
+      prefetch(rows[cur].href);
+    };
+    rows.forEach((r, i) => {
+      r.addEventListener("pointerenter", () => select(i), { signal });
+      r.addEventListener("focus", () => select(i), { signal });
+    });
+    wheelSelect(dir => select(cur + dir, true), signal, () => !opening);
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (e.altKey || e.ctrlKey || e.metaKey || opening) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          select(cur + 1, true);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          select(cur - 1, true);
+        } else if (e.key === "Enter" && !(e.target as HTMLElement).closest("a, button")) {
+          e.preventDefault();
+          rows[cur].click();
+        }
+      },
+      { signal }
+    );
+
+    // Opening a chapter: the whole screen fades to black (the site's usual
+    // fade, with a soft paper swish), then the chapter.
+    book.querySelectorAll<HTMLAnchorElement>("[data-open]").forEach(a =>
+      a.addEventListener(
+        "click",
+        e => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          if (opening) return;
+          opening = true;
+          prefetch(a.href);
+          if (reduce) return void navigate(a.href);
+          if (soundOn()) whoosh();
+          // Dive into the book: zoom toward what you clicked while the
+          // screen fades, so it feels like going inside the page.
+          const spread = book.querySelector<HTMLElement>(".spread");
+          if (spread) {
+            const s = spread.getBoundingClientRect();
+            const t = a.getBoundingClientRect();
+            spread.style.transformOrigin = `${t.left + t.width / 2 - s.left}px ${t.top + t.height / 2 - s.top}px`;
+            book.classList.add("is-diving");
+          }
+          document.documentElement.classList.add("sys-leaving");
+          setTimeout(() => navigate(a.href), 380);
+        },
+        { signal }
+      )
+    );
+
+    // Leaving for the save files (Esc or "‹ Save files", handled by the
+    // shell): the book shuts with a sound as it closes.
+    document.addEventListener("nv:closing", () => soundOn() && bookClose(), { signal });
+
+    // Arriving (from anywhere): the book falls open. Desktop only (phones
+    // show one page at a time) and not with reduced motion.
+    if (!reduce && matchMedia("(min-width: 900px)").matches) {
+      book.classList.add("is-opening");
+      const t1 = setTimeout(() => soundOn() && pageTurn(), 230);
+      const t2 = setTimeout(() => book.classList.remove("is-opening"), 1000);
+      signal.addEventListener("abort", () => (clearTimeout(t1), clearTimeout(t2)));
+    }
+
+    // The cursor starts on the first chapter in the contents…
+    select(Math.max(0, rows.findIndex(r => r.classList.contains("toc-row"))));
+    // …or, back from a chapter, on the chapter you just read.
+    try {
+      const backFrom = sessionStorage.getItem("pageBack");
+      if (backFrom) {
+        sessionStorage.removeItem("pageBack");
+        const i = rows.findIndex(r => r.classList.contains("toc-row") && r.pathname.replace(/\/+$/, "").endsWith(`/${backFrom}`));
+        if (i >= 0) select(i);
+      }
+    } catch {}
+    ready = true;
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  /* ── the scene behind: the main menu's world, dimmed, with a warm pool
+     of lamplight on the book ─────────────────────────────── */
+  .scene {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: #04050c;
+  }
+  .scene-dim {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 55% at 50% 45%, rgb(255 196 130 / 0.16), transparent 70%),
+      radial-gradient(ellipse 80% 75% at 50% 45%, rgb(4 5 12 / 0.45), rgb(4 5 12 / 0.85) 100%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+  }
+  :global(html[data-scene="day"]) .scene-dim {
+    background:
+      radial-gradient(ellipse 60% 55% at 50% 45%, rgb(255 236 200 / 0.18), transparent 70%),
+      radial-gradient(ellipse 80% 75% at 50% 45%, rgb(10 22 50 / 0.25), rgb(10 22 50 / 0.6) 100%);
+  }
+  .desk {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    min-height: 100svh;
+  }
+  @media (min-width: 900px) {
+    .desk {
+      /* Sized so the whole book (plus the ribbon hanging below it) fits in
+         one screen without scrolling. */
+      padding: clamp(1.25rem, 3.5svh, 2.5rem) clamp(2rem, 4vw, 5rem) clamp(2.75rem, 6svh, 4rem);
+    }
+  }
+
+  /* ── the open book ─────────────────────────────────────── */
+  .spread {
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .27 0 0 0 0 .18 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    position: relative;
+    display: grid;
+    width: 100%;
+    color: var(--nv-paper-ink);
+  }
+  /* ── the book as a pixel object (like the cartridges) ────────────
+     A navy cloth hardcover shows around the pages, with stepped pixel
+     corners; the whole book casts the site's hard, offset pixel shadow.
+     The pages and everything you read on them stay crisp. */
+  .spread {
+    /* Navy ink for numbers and ornaments (instead of oxblood). */
+    --nv-paper-accent: #2b3f8f;
+  }
+  @media (min-width: 900px) {
+    .desk {
+      filter: drop-shadow(12px 12px 0 rgb(3 4 14 / 0.85));
+    }
+    .spread {
+      --step: 6px;
+      grid-template-columns: 1fr 1fr;
+      max-width: 1440px;
+      padding: 14px;
+      /* Everything inside scales with the book on big screens. */
+      font-size: clamp(0.95rem, 0.5rem + 0.5vw, 1.2rem);
+      /* The cover: navy cloth with a fine pixel weave. */
+      background:
+        repeating-linear-gradient(0deg, rgb(255 255 255 / 0.04) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(90deg, rgb(0 0 0 / 0.12) 0 2px, transparent 2px 4px),
+        linear-gradient(180deg, #27306a, #1b2150);
+      /* Stepped pixel corners. */
+      clip-path: polygon(
+        calc(var(--step) * 2) 0, calc(100% - var(--step) * 2) 0,
+        calc(100% - var(--step) * 2) var(--step), calc(100% - var(--step)) var(--step),
+        calc(100% - var(--step)) calc(var(--step) * 2), 100% calc(var(--step) * 2),
+        100% calc(100% - var(--step) * 2), calc(100% - var(--step)) calc(100% - var(--step) * 2),
+        calc(100% - var(--step)) calc(100% - var(--step)), calc(100% - var(--step) * 2) calc(100% - var(--step)),
+        calc(100% - var(--step) * 2) 100%, calc(var(--step) * 2) 100%,
+        calc(var(--step) * 2) calc(100% - var(--step)), var(--step) calc(100% - var(--step)),
+        var(--step) calc(100% - var(--step) * 2), 0 calc(100% - var(--step) * 2),
+        0 calc(var(--step) * 2), var(--step) calc(var(--step) * 2),
+        var(--step) var(--step), calc(var(--step) * 2) var(--step)
+      );
+      animation: book-in 0.5s ease both;
+    }
+    /* The spine: a raised navy band down the middle of the cover. */
+    .spread::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: calc(50% - 4px);
+      width: 8px;
+      z-index: 1;
+      background: repeating-linear-gradient(180deg, #151a40 0 4px, #222a5e 4px 8px);
+    }
+  }
+  /* ── the book falling open on arrival ──────────────────────────
+     It arrives about 75% open: the left page (with everything on it)
+     stands lifted on the spine and falls flat onto the table, with a
+     small bounce and a jolt. Nothing appears late and no back is ever
+     shown. While it moves, the pixel shadow is off (a shadow filter is
+     redrawn every frame) and the stepped corners are off (they'd clip the
+     page as it rises toward you); both come back as it lands. */
+  @media (min-width: 900px) {
+    .spread {
+      perspective: 2600px;
+    }
+    .desk:global(.is-opening) {
+      filter: none;
+    }
+    .desk {
+      transition: filter 0.4s ease;
+    }
+    .desk:global(.is-opening) .spread {
+      clip-path: none;
+    }
+    .desk:global(.is-opening) .verso {
+      position: relative;
+      z-index: 3;
+      transform-origin: right center;
+      animation: fall-open 0.6s cubic-bezier(0.55, 0, 0.9, 0.45) both;
+    }
+    .desk:global(.is-opening) .recto {
+      animation: jolt 0.25s ease-out 0.5s both;
+    }
+  }
+  @keyframes fall-open {
+    0% {
+      transform: rotateY(48deg);
+      filter: brightness(1.04);
+    }
+    82% {
+      transform: rotateY(0deg);
+    }
+    91% {
+      transform: rotateY(4deg);
+    }
+    100% {
+      transform: rotateY(0deg);
+    }
+  }
+  /* Leaving for the save files: the same move in reverse. While the screen
+     fades to black, the left page lifts off the table back to about 75%
+     open, decelerating as it rises. (Opening a chapter keeps the book open:
+     you're reading on, not putting it away.) */
+  @media (min-width: 900px) {
+    :global(html.nv-closing) .desk {
+      filter: none;
+    }
+    :global(html.nv-closing) .desk .spread {
+      clip-path: none;
+    }
+    :global(html.nv-closing) .desk .verso {
+      position: relative;
+      z-index: 3;
+      transform-origin: right center;
+      /* Same duration and curve as the closing fade (global.css). */
+      animation: lift-closed 0.35s cubic-bezier(0.2, 0.6, 0.35, 1) forwards;
+    }
+  }
+  @keyframes lift-closed {
+    from {
+      transform: rotateY(0deg);
+    }
+    to {
+      transform: rotateY(48deg);
+      filter: brightness(1.04);
+    }
+  }
+
+  /* Opening a chapter: the book zooms toward the chapter you picked
+     (origin set from the click) while the screen fades to black. It
+     speeds up as it goes, like falling into the page. The shadow filter
+     is off so it isn't redrawn every frame. */
+  .desk:global(.is-diving) {
+    filter: none;
+    transition: none;
+  }
+  .desk:global(.is-diving) .spread {
+    transform: scale(1.35);
+    transition: transform 0.38s cubic-bezier(0.55, 0, 0.85, 0.35);
+  }
+
+  /* The impact: the right page gives a tiny jolt as the left one lands. */
+  @keyframes jolt {
+    40% {
+      transform: translateY(2px);
+    }
+  }
+
+  /* Arriving: the book simply fades in. */
+  @keyframes book-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem 1.5rem 3.5rem;
+    background: var(--grain), var(--nv-paper);
+  }
+  @media (min-width: 900px) {
+    .page {
+      min-height: clamp(520px, 72svh, 820px);
+      padding: 2.2em 3.4em 3.4em;
+    }
+    /* Paper falling into the spine in hard pixel steps (not a smooth
+       curve), and the stack of page edges as hard 2px stripes. */
+    .verso {
+      background:
+        linear-gradient(to left, rgb(60 40 20 / 0.2) 0 6px, rgb(60 40 20 / 0.1) 6px 14px, rgb(60 40 20 / 0.04) 14px 26px, transparent 26px),
+        var(--grain),
+        var(--nv-paper);
+      box-shadow:
+        -2px 0 0 #d2c3a8,
+        -4px 0 0 #ece2cf,
+        -6px 0 0 #cdbd9f,
+        -8px 0 0 #e6dbc6,
+        0 2px 0 #d2c3a8,
+        -2px 4px 0 #ece2cf;
+    }
+    .recto {
+      background:
+        linear-gradient(to right, rgb(60 40 20 / 0.2) 0 6px, rgb(60 40 20 / 0.1) 6px 14px, rgb(60 40 20 / 0.04) 14px 26px, transparent 26px),
+        var(--grain),
+        var(--nv-paper);
+      box-shadow:
+        2px 0 0 #d2c3a8,
+        4px 0 0 #ece2cf,
+        6px 0 0 #cdbd9f,
+        8px 0 0 #e6dbc6,
+        0 2px 0 #d2c3a8,
+        2px 4px 0 #ece2cf;
+    }
+  }
+  @media (max-width: 899px) {
+    .verso {
+      border-bottom: 1px solid var(--nv-paper-rule);
+    }
+  }
+
+  /* Ribbon bookmark, lying in the gutter and hanging off the bottom. */
+  .ribbon {
+    display: none;
+  }
+  @media (min-width: 900px) {
+    .ribbon {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 1.1em;
+      z-index: 2;
+      width: 14px;
+      /* Ends at the foot of the page (the book's stepped edge would clip
+         anything hanging past it). */
+      height: 100%;
+      /* Lamp amber, in hard pixel bands, with a stepped notch at the tail. */
+      background: linear-gradient(90deg, #b8791a 0 4px, #e3a43a 4px 10px, #c98a26 10px);
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 10px 100%, 10px calc(100% - 4px), 4px calc(100% - 4px), 4px 100%, 0 100%);
+    }
+  }
+
+  .runhead {
+    color: var(--nv-paper-muted);
+  }
+  /* The way back, in the book's own running head. */
+  .back {
+    padding: 0.35em 0;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .back:hover,
+  .back:focus-visible {
+    color: var(--nv-paper-accent);
+  }
+  .runhead-right {
+    text-align: right;
+  }
+
+  .folio {
+    position: absolute;
+    bottom: 1.5em;
+    margin: 0;
+    font-family: var(--nv-display);
+    font-style: italic;
+    color: var(--nv-paper-muted);
+  }
+  .verso .folio {
+    left: 1.5rem;
+  }
+  .recto .folio {
+    right: 1.5rem;
+  }
+  @media (min-width: 900px) {
+    .verso .folio {
+      left: 3.6em;
+    }
+    .recto .folio {
+      right: 3.6em;
+    }
+  }
+
+  /* ── frontispiece ───────────────────────────────────────── */
+  .frontis {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.9em;
+    margin-top: 1.5em;
+    text-decoration: none;
+    text-align: center;
+  }
+  /* Tipped-in plate: the cover inside a thin printed frame. */
+  .frontis-plate {
+    display: block;
+    padding: 0.9em;
+    border: 1px solid var(--nv-paper-rule);
+    box-shadow: inset 0 0 0 4px var(--nv-paper), inset 0 0 0 5px rgb(201 184 156 / 0.6);
+  }
+  .frontis-cover {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: min(68vw, 17em);
+    max-height: 46svh;
+    box-shadow:
+      0 1px 0 rgb(0 0 0 / 0.15),
+      0 14px 30px -12px rgb(0 0 0 / 0.55);
+    transition:
+      transform 0.35s ease,
+      box-shadow 0.35s ease;
+  }
+  .frontis:hover .frontis-cover,
+  .frontis:focus-visible .frontis-cover {
+    transform: translateY(-4px);
+    box-shadow:
+      0 1px 0 rgb(0 0 0 / 0.15),
+      0 24px 40px -14px rgb(0 0 0 / 0.6);
+  }
+  .frontis-caption {
+    margin-top: 0.4em;
+    font-size: 1.05em;
+  }
+  .frontis-more {
+    color: var(--nv-paper-accent);
+    font-size: 0.72em;
+  }
+  .frontis:hover .frontis-more,
+  .frontis:global(.is-active) .frontis-more {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  /* Selected (by the arrows, wheel or hover): the plate lifts a little, the
+     way a chapter row gets its ▶. */
+  .frontis:global(.is-active) .frontis-cover {
+    transform: translateY(-4px);
+    box-shadow:
+      0 1px 0 rgb(0 0 0 / 0.15),
+      0 24px 40px -14px rgb(0 0 0 / 0.6);
+  }
+  .frontis {
+    outline: none;
+  }
+
+  /* ── title page + contents ─────────────────────────────── */
+  .recto-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100%;
+    max-width: 30em;
+    margin-inline: auto;
+    padding-block: 1.5em 2em;
+  }
+  .titlepage {
+    text-align: center;
+  }
+  /* The title in the pixel font, like game titles and cartridge names. */
+  h1 {
+    margin: 0;
+    font-family: var(--font-pixel), monospace;
+    font-size: 2.9em;
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    text-shadow: 0.06em 0.06em 0 rgb(42 34 28 / 0.18);
+  }
+  .subtitle {
+    margin: 0.5em 0 0;
+    font-style: italic;
+    color: var(--nv-paper-muted);
+  }
+  .fleuron {
+    margin: 1em 0 0;
+    font-size: 1.3em;
+    color: var(--nv-paper-accent);
+  }
+
+  .contents-label {
+    margin: 2.5em 0 0;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid var(--nv-paper-rule);
+    text-align: center;
+    color: var(--nv-paper-muted);
+  }
+  .toc {
+    margin: 0.5em 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .toc li {
+    padding: 0.9em 0;
+  }
+  .toc li + li {
+    border-top: 1px dotted var(--nv-paper-rule);
+  }
+  .toc-row {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+    text-decoration: none;
+  }
+  .toc-row:focus-visible {
+    outline: none;
+  }
+  /* The game's cursor, in the book's margin: a pixel ▶ beside the chapter
+     you're on (mouse, wheel or arrow keys). */
+  .cursor {
+    position: absolute;
+    left: -1.7em;
+    top: 0.2em;
+    color: #d9952a;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.85em;
+    text-shadow: 0.08em 0.08em 0 rgb(42 34 28 / 0.55);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.15s,
+      transform 0.15s;
+  }
+  /* (Still, not bobbing: an endless animation inside the book would make
+     the browser redraw the book's pixel shadow on every frame.) */
+  .toc-row:global(.is-active) .cursor {
+    opacity: 1;
+    transform: none;
+  }
+  /* Narrow screens: the page margin is thinner, so the cursor sits closer
+     in (it was half off the screen). Touch screens have no cursor to move,
+     so it's hidden there. */
+  @media (max-width: 899px) {
+    .cursor {
+      left: -1.15em;
+    }
+  }
+  @media (hover: none) {
+    .cursor {
+      display: none;
+    }
+  }
+  .toc-num {
+    min-width: 2.2em;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: var(--nv-paper-accent);
+  }
+  .toc-title {
+    font-family: var(--nv-display);
+    font-size: 1.35em;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+  /* Dotted leader running from the title to the year. */
+  .toc-leader {
+    flex: 1;
+    min-width: 1.5em;
+    border-bottom: 2px dotted var(--nv-paper-rule);
+    transform: translateY(-0.3em);
+  }
+  .toc-year {
+    font-variant-numeric: oldstyle-nums;
+    color: var(--nv-paper-muted);
+  }
+  .toc-meta {
+    margin: 0.15em 0 0 2.8em;
+    font-size: 0.85em;
+    font-style: italic;
+    color: var(--nv-paper-muted);
+  }
+  .toc-row:hover .toc-title,
+  .toc-row:focus-visible .toc-title,
+  .toc-row:global(.is-active) .toc-title {
+    color: var(--nv-paper-accent);
+    font-style: italic;
+  }
+  /* The next, unwritten chapter: there, but faint. */
+  /* The unwritten chapter: a row like the others, but faint and italic. */
+  .toc-future .toc-row {
+    font-style: italic;
+    color: var(--nv-paper-muted);
+  }
+  .toc-future .toc-row:not(:global(.is-active)) {
+    opacity: 0.75;
+  }
+  .toc-future .toc-num {
+    color: var(--nv-paper-muted);
+  }
+
+
+  @media (prefers-reduced-motion: reduce) {
+    .spread,
+    .recto,
+    .cursor {
+      animation: none !important;
+    }
+    .frontis-cover {
+      transition: none;
+    }
+  }
+</style>

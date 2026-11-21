@@ -1,0 +1,71 @@
+---
+/**
+ * Verse that grows with the <Dimensions> figure: line i appears when the
+ * figure reaches stage i (0 = a point ... 4 = a tesseract). Lines beyond the
+ * last stage follow a beat after it. Hidden lines keep their space, so
+ * nothing shifts. Without JS, or with reduced motion, all lines show.
+ */
+interface Props {
+  lines: string[];
+}
+const { lines } = Astro.props;
+---
+
+<div class="verse" data-verse>
+  {lines.map((l, i) => <p data-stage={Math.min(i, 4)} data-extra={i > 4 ? "true" : undefined}>{l}</p>)}
+</div>
+
+<script>
+  function initVerse() {
+    document.querySelectorAll<HTMLElement>("[data-verse]").forEach(root => {
+      if (root.dataset.init) return;
+      root.dataset.init = "true";
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      root.classList.add("is-growing");
+      const lines = [...root.querySelectorAll<HTMLElement>("p")];
+      const show = (stage: number) =>
+        lines.forEach(l => l.classList.toggle("on", Number(l.dataset.stage) <= stage));
+      show(0);
+      const ctl = new AbortController();
+      document.addEventListener(
+        "dimlove:stage",
+        e => show((e as CustomEvent<number>).detail),
+        { signal: ctl.signal }
+      );
+      document.addEventListener("astro:before-swap", () => ctl.abort(), { once: true });
+    });
+  }
+  initVerse();
+  document.addEventListener("astro:page-load", initVerse);
+</script>
+
+<style>
+  .verse {
+    font-family: var(--nv-display);
+    font-size: 1.45em;
+    line-height: 1.5;
+  }
+  .verse p {
+    margin: 0;
+  }
+  /* The closing line sits a little apart. */
+  .verse p[data-extra] {
+    margin-top: 0.5em;
+    font-style: italic;
+    color: var(--nv-accent);
+  }
+  .is-growing p {
+    opacity: 0;
+    transform: translateY(0.4em);
+    transition:
+      opacity 0.9s ease,
+      transform 0.9s ease;
+  }
+  .is-growing p.on {
+    opacity: 1;
+    transform: none;
+  }
+  .is-growing p[data-extra].on {
+    transition-delay: 1s;
+  }
+</style>

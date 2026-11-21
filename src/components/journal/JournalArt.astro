@@ -1,0 +1,59 @@
+---
+/**
+ * The Journal's picture: a pixel notebook (navy cover, cream ruled pages,
+ * a red margin line, spiral rings along the top) with a yellow pencil
+ * lying across it. Drawn as pixel blocks, so it's crisp at any size.
+ */
+interface Props {
+  class?: string;
+}
+const { class: cls } = Astro.props;
+
+type Px = { x: number; y: number; c: string };
+const px: Px[] = [];
+const put = (x: number, y: number, c: string) => px.push({ x, y, c });
+const W = 26, H = 18;
+
+// The notebook: cover, then the page inside it.
+const NB = { x: 1, y: 2, w: 17, h: 15 };
+for (let y = NB.y; y < NB.y + NB.h; y++)
+  for (let x = NB.x; x < NB.x + NB.w; x++) {
+    const edge = x === NB.x || x === NB.x + NB.w - 1 || y === NB.y + NB.h - 1;
+    put(x, y, edge ? "#2b3574" : "#f4eedb");
+  }
+// A shadow under the cover's bottom edge.
+for (let x = NB.x + 1; x < NB.x + NB.w + 1; x++) put(x, NB.y + NB.h, "#151a40");
+// Ruled lines and the red margin.
+for (let y = NB.y + 3; y < NB.y + NB.h - 1; y += 2)
+  for (let x = NB.x + 3; x < NB.x + NB.w - 1; x++) put(x, y, "#a9bce0");
+for (let y = NB.y + 1; y < NB.y + NB.h - 1; y++) put(NB.x + 2, y, "#d86a5a");
+// A few lines of "writing" in graphite.
+for (const [y, len] of [[NB.y + 2, 9], [NB.y + 4, 11], [NB.y + 6, 7], [NB.y + 8, 10]] as const)
+  for (let x = NB.x + 4; x < NB.x + 4 + len; x++) if ((x + y) % 4 !== 0) put(x, y, "#5b5650");
+// Spiral rings over the top edge.
+for (let x = NB.x + 2; x < NB.x + NB.w - 1; x += 2) {
+  put(x, NB.y - 1, "#9aa0d6");
+  put(x, NB.y, "#9aa0d6");
+  put(x, NB.y + 1, "#3a3f5c");
+}
+
+// The pencil, lying diagonally across the corner: eraser, ferrule, body,
+// sharpened wood, graphite tip.
+const pencil: [number, string][] = [
+  [0, "#e88f9a"], [1, "#e88f9a"], [2, "#b8b8c8"],
+  [3, "#f2c14e"], [4, "#f2c14e"], [5, "#f2c14e"], [6, "#f2c14e"], [7, "#f2c14e"], [8, "#f2c14e"], [9, "#f2c14e"],
+  [10, "#e8c89a"], [11, "#3b3632"],
+];
+for (const [i, c] of pencil) {
+  const x = 24 - i;
+  const y = 6 + i;
+  put(x, y, c);
+  // Two pixels thick, the lower row a shade darker (it's round).
+  const shade = c === "#f2c14e" ? "#c9962b" : c === "#e88f9a" ? "#c86f7a" : c === "#b8b8c8" ? "#8d8da0" : c;
+  if (i < 11) put(x - 1, y, shade);
+}
+---
+
+<svg class={cls} viewBox={`0 0 ${W} ${H}`} shape-rendering="crispEdges" role="img" aria-label="A notebook and a pencil">
+  {px.map(p => <rect x={p.x} y={p.y} width="1" height="1" fill={p.c} />)}
+</svg>

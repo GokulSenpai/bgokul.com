@@ -1,0 +1,38 @@
+---
+title: Breath Hold
+kind: Prototype
+tagline: A **breath-holding** mechanic for horror, later built into **SVTCH**.
+youtubeId: vXbsyxy3Pjw
+cover: ./cover.webp
+order: 3
+color: gray
+tools: ['Unity', 'C#']
+features:
+  - Raycast interaction system
+  - name: Breath hold
+    items:
+      - Hold Alt to hold breath
+      - Customisable hold duration
+      - Exhale on release
+  - name: Rising tension
+    items:
+      - Vignette intensifies
+      - Screen shake intensifies
+  - name: Dynamic breathing
+    items:
+      - Exhale audio scales with hold time
+---
+
+## Overview
+
+Breath Hold is a stealth mechanic for a horror game: hold your breath to stay hidden, but the longer you hold it, the harder it is to keep going. It later became the core survival mechanic in [SVTCH](/portfolio/design/svtch).
+
+## How it works
+
+Holding Alt starts a breath-hold timer with a configurable maximum duration. Releasing Alt, or running out of breath, ends the hold and triggers the exhale.
+
+While the timer runs, the elapsed time is normalised to a value from 0 to 1 that drives both the post-processing vignette and the camera shake amplitude, so the pressure builds smoothly instead of in steps.
+
+The exhale is dynamic. The hold duration is passed to the breathing audio on release and sets the intensity of the breath out, so a short hold ends in a quiet breath and a full one ends in a heavy gasp.
+
+The prototype also includes a raycast-based interaction system for the objects in the scene.

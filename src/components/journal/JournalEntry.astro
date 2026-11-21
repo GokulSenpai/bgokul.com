@@ -1,0 +1,162 @@
+---
+/**
+ * One entry in a Journal list: a dated line in the notebook. The date in
+ * pencil, the title in pixel ink, a line of description, then the reading
+ * time and tags. The selected entry gets a swipe of amber highlighter and
+ * a pencil ▶. `featured` makes it the big one at the top, with its cover
+ * photo taped on (if it has one).
+ */
+import type { CollectionEntry } from "astro:content";
+import { Image } from "astro:assets";
+import dayjs from "dayjs";
+import { getPostUrl } from "@/utils/getPostPaths";
+import { readingTime } from "@/utils/readingTime";
+
+type Props = {
+  post: CollectionEntry<"posts">;
+  featured?: boolean;
+};
+
+const { post, featured } = Astro.props;
+const { title, description, pubDatetime, tags, cover } = post.data;
+const href = getPostUrl(post.id, post.filePath, Astro.currentLocale);
+const date = dayjs(pubDatetime).format("D MMM YYYY");
+const mins = readingTime(post.body);
+---
+
+<li class:list={["nb-entry", { "is-featured": featured }]}>
+  <a href={href} class="nb-entry-link" data-entry>
+    <span class="nb-entry-cursor" aria-hidden="true">▶</span>
+    <span class="nb-entry-date nb-note"><time datetime={pubDatetime.toISOString()}>{date}</time></span>
+    <span class="nb-entry-main">
+      <span class="nb-entry-title"><span class="hl">{title}</span></span>
+      <span class="nb-entry-desc">{description}</span>
+      <span class="nb-entry-meta">
+        {mins} min read{tags.length > 0 && <> · {tags.map(t => `#${t}`).join("  ")}</>}
+      </span>
+    </span>
+    {
+      featured && cover && (
+        <span class="nb-photo" aria-hidden="true">
+          <Image src={cover} alt="" widths={[240, 360]} sizes="12rem" />
+        </span>
+      )
+    }
+  </a>
+</li>
+
+<style is:global>
+  .nb-entries {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .nb-entry + .nb-entry {
+    border-top: 1px dashed rgb(107 101 93 / 0.35);
+  }
+  .nb-entry-link {
+    position: relative;
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+    gap: 0.25rem 1.25rem;
+    align-items: start;
+    padding: 1rem 0;
+    color: var(--ink) !important;
+    text-decoration: none;
+  }
+  .nb-entry-cursor {
+    position: absolute;
+    top: 1.15rem;
+    left: -2.1rem;
+    color: var(--pencil);
+    font-size: 0.8rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .nb-entry-date {
+    padding-top: 0.15rem;
+  }
+  .nb-entry-main {
+    display: grid;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+  .nb-entry-title {
+    font-family: var(--font-pixel), monospace;
+    font-size: 1.2rem;
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  /* The highlighter: a slightly tilted amber swipe behind the title. */
+  .nb-entry-title .hl {
+    background: linear-gradient(100deg, transparent 0.3em, var(--hilite) 0.5em, var(--hilite) calc(100% - 0.4em), transparent calc(100% - 0.2em)) 0 85% / 0% 70% no-repeat;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    transition: background-size 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .nb-entry-desc {
+    color: #4d4741;
+    font-size: 0.98rem;
+    line-height: 1.55;
+  }
+  .nb-entry-meta {
+    color: var(--pencil);
+    font-size: 0.82rem;
+  }
+  .nb-entry-link.is-active .nb-entry-cursor,
+  .nb-entry-link:focus-visible .nb-entry-cursor {
+    opacity: 1;
+  }
+  .nb-entry-link.is-active .hl,
+  .nb-entry-link:focus-visible .hl {
+    background-size: 100% 70%;
+  }
+  .nb-entry-link:focus-visible {
+    outline: none;
+  }
+
+  /* The featured entry: bigger, with its photo taped on. */
+  .nb-entry.is-featured .nb-entry-title {
+    font-size: 1.55rem;
+  }
+  .nb-photo {
+    position: relative;
+    width: 12rem;
+    padding: 0.4rem 0.4rem 1.4rem;
+    background: #fff;
+    box-shadow: 3px 4px 0 rgb(43 39 36 / 0.18);
+    transform: rotate(2.5deg);
+  }
+  .nb-photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+  /* A strip of tape over the top. */
+  .nb-photo::before {
+    content: "";
+    position: absolute;
+    top: -0.55rem;
+    left: 50%;
+    width: 4.5rem;
+    height: 1.1rem;
+    background: rgb(240 230 190 / 0.75);
+    transform: translateX(-50%) rotate(-4deg);
+  }
+
+  @media (max-width: 640px) {
+    .nb-entry-link {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .nb-entry-cursor {
+      display: none;
+    }
+    .nb-photo {
+      width: 10rem;
+      margin-top: 0.5rem;
+    }
+  }
+</style>

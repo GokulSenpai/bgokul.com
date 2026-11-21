@@ -1,0 +1,72 @@
+---
+# ── HOW TO USE ────────────────────────────────────────────────────────────
+# 1. Copy this whole "_template" folder and rename the copy to your game's
+#    slug (lowercase, hyphens for spaces, e.g. "my-new-game"). That folder
+#    name becomes the URL: /portfolio/design/my-new-game
+# 2. Put a cover image in that folder and point `cover:` at it below.
+# 3. Fill in whatever fields apply. Delete any line you don't need — every
+#    field below except title/cover/order is optional, and anything left
+#    out just doesn't render (no empty rows, no blank sections).
+# 4. Write the write-up below the closing "---" in plain Markdown.
+# It'll show up as a tile on /portfolio/design and get its own page
+# automatically — nothing else to wire up.
+# ─────────────────────────────────────────────────────────────────────────
+
+# Required — the game's name.
+title: Untitled Game
+
+# Required — path to the cover image, relative to this folder.
+# Run `npm run convert-images -- <path-to-image>` first if it's not
+# already a .webp, to keep the file small.
+cover: ./cover.webp
+
+# Required — controls sort position on /portfolio/design (lower = earlier).
+order: 99
+
+# Optional — the one-line description shown on the tile.
+tagline: A one-sentence description of the game.
+
+# Optional — shown in the metadata row on the detail page only.
+year: 2026
+
+# Optional — free-text role, shown as a plain line.
+role: Solo developer (prototype)
+
+# Optional — role shown as tag chips instead (use this OR `role`, not both).
+# roles: ['Design', 'Art', 'Programming']
+
+tools: ['Godot']
+
+# Optional — hex color. Themes this game's entire detail page (heading,
+# links, bullet markers, header tint, gradient card border) to match.
+# accentColor: '#e8b923'
+
+# Optional — 'cover' (default, crops to fill) or 'contain' (shows the
+# whole image, letterboxed — use this if the cover would otherwise get
+# awkwardly cropped, e.g. a square screenshot).
+# coverFit: contain
+
+# Optional — extra images. Renders as a carousel alongside the cover.
+# gallery:
+#   - ./gallery-1.webp
+#   - ./gallery-2.webp
+
+# Optional — external links (Steam, itch.io, etc.) shown on the detail page.
+# links:
+#   - label: Steam
+#     url: 'https://store.steampowered.com/'
+#   - label: itch.io
+#     url: 'https://itch.io/'
+
+# Optional — embeds a playable build in an iframe on the detail page.
+# embedUrl: 'https://itch.io/embed-upload/YOUR_UPLOAD_ID'
+
+# Optional — embeds a trailer video on the detail page.
+# trailerUrl: '/videos/my-game-trailer.mp4'
+
+# Optional — surfaces this project first wherever "featured" is used.
+# featured: true
+---
+
+Write the full case-study here in plain Markdown — paragraphs, `## Headings`,
+`- bullet points`, `**bold**`. This is the body of the detail page.

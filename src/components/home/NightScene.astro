@@ -1,0 +1,967 @@
+---
+/**
+ * Home background: a small pixel-art seaside scene drawn live on a canvas,
+ * with a lighthouse on a cliff (a nod to The Lighthouse). It follows the
+ * visitor's clock: day from 6am to 6pm, night otherwise.
+ *
+ *  - Both: a picket fence, bushes and wildflowers on the cliff.
+ *  - Night: a dithered navy sky with twinkling stars and shooting stars,
+ *    the moon and its shimmering reflection, the lighthouse lit with two
+ *    beams sweeping round.
+ *  - Day: a blue sky with drifting clouds, the sun glittering on the sea,
+ *    a grassy cliff, the lamp off (no beams or spotlight), sailing boats
+ *    crossing near and far, and dolphins now and then leaping out of the
+ *    sea and diving back in.
+ *
+ * The mode is set on <html data-scene="day|night"> before paint (so pages
+ * can colour their text to match), and "scene:change" switches it live.
+ *
+ * Drawn at low resolution (one "pixel" is 3 to 6 screen pixels) and
+ * scaled up with crisp edges. Redrawn every frame so movement is smooth;
+ * stars and water still step at 15 fps for a retro feel. The layout is
+ * seeded, so it's the same scene every visit. With reduced motion on, it
+ * draws one still frame.
+ *
+ * It listens for two events from the page:
+ *  - "night:aim" {x, y} | null: lock the beam onto a point (client px), or let go.
+ *  - "night:poke" {x, y}: a ripple on the sea; in the sky, a shooting star
+ *    (night) or a seagull (day). A poke right on the lighthouse lamp brings
+ *    the keeper out to wave.
+ */
+---
+
+<script is:inline>
+  // Day or night, decided before paint so the text colours match at once:
+  // the platinum's pick (src/scripts/scene.ts), else the clock.
+  try {
+    const pick = localStorage.getItem("sceneChoice");
+    const h = new Date().getHours();
+    document.documentElement.dataset.scene =
+      pick === "day" || pick === "night" ? pick : h >= 6 && h < 18 ? "day" : "night";
+  } catch {
+    document.documentElement.dataset.scene = "night";
+  }
+</script>
+
+<div class="night" aria-hidden="true">
+  <canvas data-night></canvas>
+</div>
+
+<script>
+  import { unlock, sawScene, isPlatinum } from "@/scripts/achievements";
+  import { currentScene } from "@/scripts/scene";
+
+  let stop: (() => void) | null = null;
+
+  // Small seeded random, so stars and waves land in the same place each visit.
+  function rng(seed: number) {
+    return () => {
+      seed |= 0;
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const hex = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+  ];
+
+  // Everything that differs between day and night.
+  const PALETTES = {
+    night: {
+      sky: ["#04050c", "#070919", "#0b0e26", "#111536", "#191d47", "#252856"].map(hex),
+      sea: ["#161a3f", "#10142f", "#0b0e23", "#080a19", "#05060f"].map(hex),
+      orb: ["#efecdc", "#d9d5c3", "#c9c5b2"], // face, shade, craters
+      halo: "rgba(170, 180, 230, 0.16)",
+      cliff: "#07070f",
+      rim: ["#23264d"],
+      cliffReflection: "rgba(3, 3, 8, 0.55)",
+      lamp: "#ffe6a3",
+      glitter: [239, 236, 220],
+      glints: "rgba(70, 82, 150, 0.45)",
+      ripple: [200, 210, 255],
+      beam: 1,
+    },
+    day: {
+      sky: ["#2f6fc4", "#3f82d1", "#5596da", "#6eaae3", "#8cc0ea", "#b3d6f0"].map(hex),
+      sea: ["#4f93cf", "#3a7fbf", "#2d6ca9", "#235a91", "#1b4a7a"].map(hex),
+      orb: ["#fff6d8", "#ffeaa8", "#ffeaa8"],
+      halo: "rgba(255, 246, 210, 0.35)",
+      cliff: "#4a4752",
+      rim: ["#7cbf5a", "#5c9e48"],
+      cliffReflection: "rgba(16, 40, 72, 0.35)",
+      lamp: "#bcd3dc",
+      glitter: [255, 251, 228],
+      glints: "rgba(225, 240, 255, 0.5)",
+      ripple: [255, 255, 255],
+      beam: 0, // lighthouses don't shine by day: no spotlight on the menu
+    },
+  };
+
+  // Day or night: the platinum's pick, else the visitor's clock. The
+  // inline script sets this before the first paint; moving between pages
+  // inside the site replaces <html>'s attributes (dropping data-scene), so
+  // it's set again after every page swap too.
+  function applyScene() {
+    if (!document.querySelector("[data-night]")) return;
+    document.documentElement.dataset.scene = currentScene();
+  }
+  document.addEventListener("astro:after-swap", applyScene);
+
+  function initNight() {
+    const canvas = document.querySelector<HTMLCanvasElement>("[data-night]");
+    if (!canvas || canvas.dataset.ready) return;
+    applyScene();
+    canvas.dataset.ready = "1";
+    const ctx = canvas.getContext("2d")!;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Achievements: this visit's real time of day (the clock, not the test
+    // button) counts towards "Round the clock".
+    const hour = new Date().getHours();
+    sawScene(hour >= 6 && hour < 18 ? "day" : "night");
+    // The platinum reward: the beam (and by day, the lamp) shines gold.
+    let golden = isPlatinum();
+    // The platinum's gold is a deep, saturated amber (the normal light is a
+    // pale cream), and a touch brighter, so the change is plain to see.
+    const BEAM = () => (golden ? "255, 168, 32" : "255, 226, 150");
+    const FLARE = () => (golden ? "255, 190, 64" : "255, 236, 180");
+    const POOL = () => (golden ? "255, 178, 48" : "255, 230, 160");
+    const GLOW = () => (golden ? 1.4 : 1);
+    const onPlatinum = () => {
+      golden = true;
+      build();
+    };
+    document.addEventListener("ach:platinum", onPlatinum);
+    const onReset = () => {
+      golden = false;
+      // The scene pick goes with the platinum: back to the clock.
+      applyScene();
+      build();
+    };
+    document.addEventListener("ach:reset", onReset);
+
+    let day = false;
+    let P = PALETTES.night;
+    let W = 0, H = 0, PX = 4, horizon = 0;
+    let base: HTMLCanvasElement;
+    let moon = { x: 0, y: 0, r: 9 };
+    let lamp = { x: 0, y: 0 };
+    let stars: { x: number; y: number; b: number; p: number; s: number }[] = [];
+    let waves: { x: number; y: number; len: number; v: number }[] = [];
+    let shooting: { x: number; y: number; vx: number; vy: number; life: number } | null = null;
+    let nextShoot = 2.5;
+    // Day only: clouds, boats and the odd seagull.
+    let clouds: { img: HTMLCanvasElement; x: number; y: number; v: number }[] = [];
+    type Boat = { x: number; y: number; size: number; dir: number; v: number; wait: number };
+    let boats: Boat[] = [];
+    let gulls: { x: number; y: number; vx: number; life: number }[] = [];
+    // Dolphins (daytime only): now and then one leaps out of the sea in
+    // an arc and dives back in, sometimes with a second just behind.
+    type Dolphin = { x0: number; y: number; dir: number; span: number; h: number; t: number; dur: number };
+    let dolphins: Dolphin[] = [];
+    let nextDolphin = 4;
+    let seaEnd = 0; // where the cliff starts: dolphins stay left of it
+
+    // Interaction: the beam can lock onto a point (a selected menu item),
+    // and pokes make ripples on the sea, or stars or gulls in the sky.
+    let aim = 0; // 0 = free, 1 = locked on
+    let aimGoal = 0;
+    let target = { x: 0, y: 0 };
+    let targetGoal = { x: 0, y: 0 };
+    let ripples: { x: number; y: number; life: number }[] = [];
+    // Easter egg: tap the lamp and the lighthouse keeper steps out onto the
+    // gallery, waves, and goes back in.
+    let gallery = { x: 0, y: 0 }; // lighthouse centre x, gallery (walkway) row
+    let keeper = -1; // seconds since he came out; -1 = inside
+
+    // The keeper (no hat), 4 px wide by 5 tall, drawn with his feet on the gallery.
+    // Waving: his raised arm swaps between two poses.
+    function drawKeeper(fx: number, fy: number, wave: number) {
+      const px = (x: number, y: number, c: string) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(fx + x, fy + y, 1, 1);
+      };
+      const coat = "#3c56a8";
+      const coatDark = "#27397a";
+      px(0, -1, "#1d1a24"); // legs
+      px(2, -1, "#1d1a24");
+      for (let x = 0; x < 3; x++) {
+        px(x, -2, x === 2 ? coatDark : coat); // body
+        px(x, -3, x === 2 ? coatDark : coat);
+      }
+      px(1, -4, "#f0c9a0"); // face
+      if (wave < 0) {
+        px(3, -2, coat); // arm down
+      } else if (wave === 0) {
+        px(3, -3, coat); // arm up
+        px(3, -4, "#f0c9a0");
+      } else {
+        px(3, -3, coat); // arm up, hand out
+        px(4, -4, "#f0c9a0");
+      }
+    }
+
+    // A sailboat. size 0 is far away (a speck), 2 is close. dir 1 = sailing right.
+    function drawBoat(b: Boat) {
+      const x = Math.round(b.x);
+      const y = b.y;
+      const px = (dx: number, dy: number, c: string) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(x + dx * b.dir, y + dy, 1, 1);
+      };
+      const row = (dx0: number, dx1: number, dy: number, c: string) => {
+        for (let dx = dx0; dx <= dx1; dx++) px(dx, dy, c);
+      };
+      if (b.size === 0) {
+        row(-1, 1, 0, "#3a2e2a");
+        px(0, -1, "#f4f1e6");
+        px(0, -2, "#f4f1e6");
+        return;
+      }
+      if (b.size === 1) {
+        row(-3, 2, 0, "#6b3f2a"); // hull
+        row(-2, 1, 1, "#4a2a1e");
+        for (let k = 0; k < 4; k++) px(0, -1 - k, "#3a2e2a"); // mast
+        row(1, 2, -2, "#f4f1e6"); // sail
+        px(1, -3, "#f4f1e6");
+        px(1, -4, "#f4f1e6");
+        px(1, -1, "#d8d3c4");
+        px(2, -1, "#d8d3c4");
+        px(-4, 1, "rgba(255,255,255,0.6)"); // wake
+        return;
+      }
+      row(-5, 4, 0, "#8a4b2f"); // hull
+      row(-4, 3, 1, "#6b3f2a");
+      row(-3, 2, 2, "#4a2a1e");
+      for (let k = 0; k < 7; k++) px(0, -1 - k, "#3a2e2a"); // mast
+      px(1, -7, "#c9463d"); // flag
+      for (let k = 0; k < 6; k++) row(1, Math.max(1, 5 - k), -1 - k, k % 3 === 2 ? "#e6e1d2" : "#f7f4ea"); // sail
+      for (let k = 0; k < 3; k++) row(-Math.max(1, 3 - k), -1, -2 - k, "#ece8db"); // jib
+      row(-8, -6, 1, "rgba(255,255,255,0.55)"); // wake
+      px(-9, 2, "rgba(255,255,255,0.35)");
+    }
+
+    // A dolphin mid-jump (daytime). u goes 0..1 along an arc; the body (5 px) lies
+    // along the arc's direction, with a dorsal fin and a tail, and only
+    // the parts above the water line are drawn.
+    function drawDolphin(d: Dolphin, u: number) {
+      const x = d.x0 + d.dir * d.span * u;
+      const y = d.y - d.h * 4 * u * (1 - u);
+      let tx = d.dir * d.span;
+      let ty = -d.h * 4 * (1 - 2 * u);
+      const len = Math.hypot(tx, ty) || 1;
+      tx /= len;
+      ty /= len;
+      // Normal pointing upwards (the fin side).
+      let nx = ty, ny = -tx;
+      if (ny > 0) (nx = -nx), (ny = -ny);
+      const body = "#56708f";
+      const back = "#3f566f";
+      const belly = "#c9d6e2";
+      const dot = (px: number, py: number, c: string) => {
+        const rx = Math.round(px), ry = Math.round(py);
+        if (ry >= d.y) return; // under the water
+        ctx.fillStyle = c;
+        ctx.fillRect(rx, ry, 1, 1);
+      };
+      for (let k = 0; k < 6; k++) {
+        const bx = x - tx * k, by = y - ty * k;
+        dot(bx, by, k === 0 ? back : body);
+        if (k > 0 && k < 5) dot(bx - nx, by - ny, belly); // belly
+        if (k > 0 && k < 4) dot(bx + nx, by + ny, back);
+      }
+      dot(x - tx * 2 + nx * 2, y - ty * 2 + ny * 2, back); // dorsal fin
+      const tx5 = x - tx * 6, ty5 = y - ty * 6; // tail flukes
+      dot(tx5 + nx, ty5 + ny, back);
+      dot(tx5 - nx, ty5 - ny, back);
+      // Spray as it breaks the surface and as it dives.
+      if (u < 0.15 || u > 0.85) {
+        const sx = u < 0.15 ? d.x0 : d.x0 + d.dir * d.span;
+        const k = u < 0.15 ? u / 0.15 : (1 - u) / 0.15;
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.8 * (1 - k)).toFixed(2)})`;
+        for (const [ox, oy] of [[-1, -1], [1, -2], [0, -3], [2, -1], [-2, -2]]) ctx.fillRect(Math.round(sx + ox), Math.round(d.y + oy * (1 - k * 0.5)), 1, 1);
+      }
+    }
+
+    // A small seagull: wings up, then flat.
+    function drawGull(x: number, y: number, flap: number) {
+      ctx.fillStyle = "#34404f";
+      const r = (dx: number, dy: number) => ctx.fillRect(Math.round(x) + dx, Math.round(y) + dy, 1, 1);
+      r(0, 0);
+      if (flap) {
+        r(-1, -1), r(-2, -1), r(1, -1), r(2, -1);
+      } else {
+        r(-1, 0), r(-2, 1), r(1, 0), r(2, 1);
+      }
+    }
+
+    // A fluffy pixel cloud on its own little canvas.
+    function makeCloud(seed: number, w: number) {
+      const r = rng(seed);
+      const h = Math.ceil(w * 0.45);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const g = c.getContext("2d")!;
+      const puffs = [
+        { x: w * 0.3, y: h * 0.62, r: h * 0.38 },
+        { x: w * 0.55, y: h * 0.45, r: h * 0.48 },
+        { x: w * 0.75, y: h * 0.65, r: h * 0.33 },
+        { x: w * (0.15 + r() * 0.1), y: h * 0.72, r: h * 0.26 },
+      ];
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const inside = puffs.some(p => Math.hypot(x - p.x, (y - p.y) * 1.2) < p.r) && y < h - 1;
+          if (!inside) continue;
+          const under = puffs.every(p => Math.hypot(x - p.x, (y + 2 - p.y) * 1.2) >= p.r) || y >= h - 3;
+          g.fillStyle = under ? "#d9e6f2" : "#ffffff";
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+      return c;
+    }
+
+    const newBoat = (b: Partial<Boat> = {}): Boat => {
+      const lanes = Math.max(4, H - horizon - 6);
+      const y = horizon + 2 + Math.floor(Math.random() ** 1.4 * lanes * 0.75);
+      const d = (y - horizon) / Math.max(1, H - horizon);
+      const size = d < 0.12 ? 0 : d < 0.35 ? 1 : 2;
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const v = [1.6, 3.2, 5.5][size] * (0.8 + Math.random() * 0.4);
+      return { x: dir > 0 ? -12 : W + 12, y, size, dir, v, wait: 0, ...b };
+    };
+
+    const toCanvas = (cx: number, cy: number) => {
+      const r = canvas!.getBoundingClientRect();
+      return { x: ((cx - r.left) * W) / r.width, y: ((cy - r.top) * H) / r.height };
+    };
+
+    // Dithered vertical gradient through a list of colours.
+    function dither(img: ImageData, y0: number, y1: number, pal: number[][]) {
+      for (let y = y0; y < y1; y++) {
+        const t = (y - y0) / Math.max(1, y1 - y0 - 1);
+        const f = t * (pal.length - 1);
+        const lo = Math.floor(f);
+        const frac = f - lo;
+        for (let x = 0; x < W; x++) {
+          const c = frac * 16 > BAYER[y & 3][x & 3] ? pal[Math.min(lo + 1, pal.length - 1)] : pal[lo];
+          const i = (y * W + x) * 4;
+          img.data[i] = c[0];
+          img.data[i + 1] = c[1];
+          img.data[i + 2] = c[2];
+          img.data[i + 3] = 255;
+        }
+      }
+    }
+
+    // Everything that doesn't move: sky, sea, moon or sun, cliff, lighthouse.
+    let built = false;
+    function build() {
+      // A resize (e.g. going fullscreen) keeps everything that's moving and
+      // just maps it onto the new size; only a first build or a day/night
+      // switch starts the moving things fresh.
+      const wasDay = day;
+      const old = { W, H, horizon };
+      day = document.documentElement.dataset.scene === "day";
+      const keep = built && wasDay === day;
+      built = true;
+      P = day ? PALETTES.day : PALETTES.night;
+      const box = canvas!.parentElement!;
+      const cw = box.clientWidth || innerWidth;
+      const ch = box.clientHeight || innerHeight;
+      // One scene pixel is ~1/300 of the width (3 to 10 screen pixels), so
+      // the lighthouse, boats and dolphins keep their size on big screens.
+      PX = Math.max(3, Math.min(10, Math.round(cw / 300)));
+      W = Math.ceil(cw / PX);
+      H = Math.ceil(ch / PX);
+      canvas!.width = W;
+      canvas!.height = H;
+      horizon = Math.round(H * 0.66);
+      const narrow = cw < 768;
+
+      base = document.createElement("canvas");
+      base.width = W;
+      base.height = H;
+      const b = base.getContext("2d")!;
+      const img = b.createImageData(W, H);
+      dither(img, 0, horizon, P.sky);
+      dither(img, horizon, H, P.sea);
+      b.putImageData(img, 0, 0);
+
+      // Moon (craters) or sun (plain, warm), with a soft dithered halo.
+      moon = { x: Math.round(W * (narrow ? 0.5 : 0.6)), y: Math.round(horizon * 0.32), r: narrow ? 7 : 9 };
+      const haloR = day ? 12 : 8;
+      for (let y = -moon.r - haloR; y <= moon.r + haloR; y++) {
+        for (let x = -moon.r - haloR; x <= moon.r + haloR; x++) {
+          const d = Math.hypot(x, y);
+          const px = moon.x + x, py = moon.y + y;
+          if (d <= moon.r) {
+            const crater = !day && ((x === -3 && y === -2) || (x === 2 && y === 3) || (x === 3 && y === -4) || (x === -1 && y === 4) || (x === 4 && y === 0));
+            b.fillStyle = crater ? P.orb[2] : x + y > moon.r * 0.9 ? P.orb[1] : P.orb[0];
+            b.fillRect(px, py, 1, 1);
+          } else if (d <= moon.r + haloR) {
+            const k = 1 - (d - moon.r) / haloR;
+            if (k * 16 > BAYER[py & 3][px & 3] + 6) {
+              b.fillStyle = P.halo;
+              b.fillRect(px, py, 1, 1);
+            }
+          }
+        }
+      }
+
+      // Cliff on the right: a jagged silhouette with a lit rim (grass by day).
+      const cliffX = Math.round(W * (narrow ? 0.7 : 0.74));
+      seaEnd = cliffX;
+      const lhX = Math.round(W * 0.86);
+      const r = rng(7);
+      let h = 2;
+      const tops: number[] = [];
+      for (let x = cliffX; x < W; x++) {
+        const into = (x - cliffX) / Math.max(1, lhX - cliffX);
+        const target = into < 1 ? into * 16 : 16 - (x - lhX) * 0.05;
+        h += (target - h) * 0.35 + (r() - 0.5) * 1.6;
+        const top = horizon - Math.max(1, Math.round(h));
+        tops[x] = top;
+        b.fillStyle = P.cliff;
+        b.fillRect(x, top, 1, horizon + 1 - top);
+        P.rim.forEach((c, k) => {
+          b.fillStyle = c;
+          b.fillRect(x, top + k, 1, 1);
+        });
+      }
+      // The cliff's reflection in the water below it.
+      b.fillStyle = P.cliffReflection;
+      for (let x = cliffX; x < W; x++) {
+        const depth = horizon - tops[x];
+        b.fillRect(x, horizon, 1, Math.round(depth * 0.7));
+      }
+
+      // Lighthouse: tapered, red and white bands, shaded on the right.
+      const groundY = tops[lhX] ?? horizon - 16;
+      const towerH = narrow ? 24 : 30;
+      for (let i = 0; i < towerH; i++) {
+        const w = Math.round(9 - (i / towerH) * 3);
+        const left = lhX - Math.floor(w / 2);
+        const red = Math.floor(i / 5) % 2 === 1;
+        for (let k = 0; k < w; k++) {
+          const lit = k < w / 2;
+          b.fillStyle = red ? (lit ? "#b8443f" : "#7d2b2a") : lit ? "#dcd6c6" : "#99938a";
+          b.fillRect(left + k, groundY - 1 - i, 1, 1);
+        }
+      }
+      const topY = groundY - 1 - towerH;
+      b.fillStyle = "#1b1b26"; // gallery
+      b.fillRect(lhX - 5, topY, 11, 1);
+      b.fillStyle = "#2a2a36"; // lamp room frame
+      b.fillRect(lhX - 3, topY - 4, 7, 4);
+      // The lamp (lit at night, glass by day; gold for the platinum).
+      b.fillStyle = golden ? "#ffcf5a" : P.lamp;
+      b.fillRect(lhX - 2, topY - 4, 5, 3);
+      b.fillStyle = "#26202a"; // roof
+      b.fillRect(lhX - 3, topY - 5, 7, 1);
+      b.fillRect(lhX - 2, topY - 6, 5, 1);
+      b.fillRect(lhX - 1, topY - 7, 3, 1);
+      b.fillRect(lhX, topY - 8, 1, 1);
+      lamp = { x: lhX + 0.5, y: topY - 2.5 };
+      gallery = { x: lhX, y: topY };
+
+      // Life on the cliff, the same by day and by night: rock texture, a
+      // picket fence, bushes and wildflowers (in dusk tones at night).
+      {
+        // Colours for the land details, by day and by night.
+        const L = day
+          ? {
+              rock: ["#5b5866", "#3a3842"],
+              rail: "#d8d1c0", post: "#ebe5d6", bush: ["#3f7f36", "#58a042"],
+              flowers: ["#f2d14b", "#ffffff", "#f29bb8", "#f2d14b"],
+            }
+          : {
+              rock: ["#121429", "#040409"],
+              rail: "#3f4370", post: "#555a8c", bush: ["#0c1124", "#182040"],
+              flowers: ["#5e6292", "#7d82b4", "#6c5480", "#5e6292"],
+            };
+        const rl = rng(31);
+        const at = (x: number, y: number, c: string) => {
+          b.fillStyle = c;
+          b.fillRect(x, y, 1, 1);
+        };
+        // Rock texture in the cliff face.
+        for (let x = cliffX; x < W; x++) {
+          for (let y = tops[x] + 3; y <= horizon; y++) {
+            const v = rl();
+            if (v < 0.07) at(x, y, L.rock[0]);
+            else if (v < 0.12) at(x, y, L.rock[1]);
+          }
+        }
+        // Picket fence along the slope, left of the lighthouse.
+        for (let x = lhX - 16; x <= lhX - 7; x++) {
+          const ty = tops[x];
+          if (ty === undefined) continue;
+          at(x, ty - 2, L.rail);
+          if (x % 2 === 0) {
+            at(x, ty - 1, L.post);
+            at(x, ty - 2, L.post);
+            at(x, ty - 3, L.post);
+          }
+        }
+        // Bushes on the slope.
+        for (const fx of [0.18, 0.45, 0.7]) {
+          const bx = Math.round(cliffX + (lhX - 18 - cliffX) * fx);
+          const ty = tops[bx];
+          if (ty === undefined) continue;
+          for (let k = -2; k <= 2; k++) at(bx + k, (tops[bx + k] ?? ty) - 1, L.bush[0]);
+          for (let k = -1; k <= 1; k++) at(bx + k, (tops[bx + k] ?? ty) - 2, L.bush[1]);
+          at(bx, ty - 3, L.bush[1]);
+        }
+        // Wildflowers.
+        for (let x = cliffX + 3; x < W; x++) {
+          if (x > lhX - 6 && x < lhX + 6) continue;
+          if (rl() < 0.16 && tops[x] !== undefined) at(x, tops[x] - 1, L.flowers[Math.floor(rl() * L.flowers.length)]);
+        }
+      }
+
+      // Stars, kept clear of the moon (seeded, so always the same sky).
+      const rs = rng(42);
+      stars = [];
+      if (!day) {
+        const n = Math.round((W * horizon) / 140);
+        for (let i = 0; i < n; i++) {
+          const x = Math.floor(rs() * W);
+          const y = Math.floor(rs() * (horizon - 6));
+          if (Math.hypot(x - moon.x, y - moon.y) < moon.r + 10) continue;
+          stars.push({ x, y, b: 0.25 + rs() * 0.75, p: rs() * Math.PI * 2, s: 0.6 + rs() * 2.2 });
+        }
+      }
+      // Small wave glints on the sea.
+      const rw = rng(99);
+      waves = [];
+      const m = Math.round((W * (H - horizon)) / 90);
+      for (let i = 0; i < m; i++) {
+        const y = horizon + 2 + Math.floor(rw() ** 1.6 * (H - horizon - 2));
+        waves.push({ x: rw() * W, y, len: 1 + Math.floor(rw() * 4 * (1 + (y - horizon) / 40)), v: (0.4 + rw()) * (rw() < 0.5 ? -1 : 1) });
+      }
+
+      if (keep && old.W > 0) {
+        // Same scene, new size: move everything in proportion.
+        const sx = W / old.W;
+        const sky = (y: number) => (y * horizon) / Math.max(1, old.horizon);
+        const sea = (y: number) => horizon + ((y - old.horizon) * (H - horizon)) / Math.max(1, old.H - old.horizon);
+        for (const c of clouds) (c.x *= sx), (c.y = Math.round(sky(c.y)));
+        for (const b of boats) (b.x *= sx), (b.y = Math.round(sea(b.y)));
+        for (const d of dolphins) (d.x0 *= sx), (d.y = Math.round(sea(d.y)));
+        for (const g of gulls) (g.x *= sx), (g.y = sky(g.y));
+        for (const r of ripples) (r.x *= sx), (r.y = sea(r.y));
+        if (shooting) (shooting.x *= sx), (shooting.y = sky(shooting.y));
+        return;
+      }
+
+      // Day: clouds at a few heights, and boats already out at sea.
+      clouds = [];
+      boats = [];
+      gulls = [];
+      dolphins = [];
+      ripples = [];
+      if (day) {
+        const rc = rng(5);
+        const count = Math.max(3, Math.round(W / 70));
+        for (let i = 0; i < count; i++) {
+          const w = 16 + Math.floor(rc() * 22);
+          clouds.push({ img: makeCloud(11 + i, w), x: rc() * W, y: Math.floor(rc() * horizon * 0.55), v: 0.6 + rc() * 1.2 });
+        }
+        for (let i = 0; i < 4; i++) boats.push(newBoat({ x: Math.random() * W }));
+      }
+    }
+
+    // t: seconds since start; dt: seconds since the last frame. Stars, the
+    // shimmer on the water and wave glints step at 15 fps (tq) for the
+    // retro feel; everything else moves every frame.
+    function frame(t: number, dt = 1 / 15) {
+      const tq = Math.floor(t * 15) / 15;
+      ctx.drawImage(base, 0, 0);
+
+      if (day) {
+        // Clouds drift slowly across.
+        for (const c of clouds) {
+          c.x += c.v * dt;
+          if (c.x > W + 4) c.x = -c.img.width - 4;
+          ctx.drawImage(c.img, Math.round(c.x), c.y);
+        }
+      } else {
+        // Stars twinkle.
+        for (const s of stars) {
+          const a = s.b * (0.55 + 0.45 * Math.sin(tq * s.s + s.p));
+          ctx.fillStyle = `rgba(235, 238, 255, ${a.toFixed(2)})`;
+          ctx.fillRect(s.x, s.y, 1, 1);
+          if (s.b > 0.93 && a > 0.75) {
+            ctx.fillStyle = `rgba(235, 238, 255, ${(a * 0.35).toFixed(2)})`;
+            ctx.fillRect(s.x - 1, s.y, 3, 1);
+            ctx.fillRect(s.x, s.y - 1, 1, 3);
+          }
+        }
+        // A shooting star now and then.
+        if (!shooting && t > nextShoot) {
+          const r = Math.random();
+          shooting = { x: W * (0.25 + r * 0.6), y: horizon * (0.05 + Math.random() * 0.25), vx: -(30 + r * 25), vy: 14 + r * 8, life: 0 };
+        }
+      }
+      if (shooting) {
+        shooting.life += dt;
+        const { x, y, vx, vy, life } = shooting;
+        for (let k = 0; k < 7; k++) {
+          const tk = life - k * 0.018;
+          if (tk < 0) break;
+          ctx.fillStyle = `rgba(255, 255, 255, ${(0.9 - k * 0.13).toFixed(2)})`;
+          ctx.fillRect(Math.round(x + vx * tk), Math.round(y + vy * tk), 1, 1);
+        }
+        if (life > 0.9) {
+          shooting = null;
+          nextShoot = t + 3.5 + Math.random() * 4.5; // one every 3.5 to 8s
+        }
+      }
+
+      // Moonlight (or sunlight) on the water: broken dashes that shift.
+      const step = Math.floor(tq * 4);
+      const [gr, gg, gb] = P.glitter;
+      for (let y = horizon + 1; y < H; y += 2) {
+        const d = (y - horizon) / (H - horizon);
+        const seed = Math.sin(y * 12.9898 + step * 78.233) * 43758.5453;
+        const jitter = seed - Math.floor(seed);
+        const w = Math.round((moon.r * 0.9 + d * moon.r * 2.2) * (0.5 + jitter * 0.7));
+        const off = Math.round(Math.sin(y * 0.7 + tq * 1.5) * (1 + d * 3));
+        ctx.fillStyle = `rgba(${gr}, ${gg}, ${gb}, ${(0.5 * (1 - d) + 0.06).toFixed(2)})`;
+        ctx.fillRect(moon.x - Math.floor(w / 2) + off, y, w, 1);
+      }
+
+      // Drifting wave glints.
+      ctx.fillStyle = P.glints;
+      for (const wv of waves) {
+        const x = (((wv.x + wv.v * tq * 2) % W) + W) % W;
+        ctx.fillRect(Math.round(x), wv.y, wv.len, 1);
+      }
+
+      // Day: boats crossing, far ones small and slow. When one leaves, a
+      // new one sets off a little later from either side, at any distance.
+      if (day) {
+        boats.sort((a, b) => a.y - b.y);
+        for (let i = 0; i < boats.length; i++) {
+          const b = boats[i];
+          if (b.wait > 0) {
+            b.wait -= dt;
+            continue;
+          }
+          b.x += b.v * b.dir * dt;
+          if ((b.dir > 0 && b.x > W + 14) || (b.dir < 0 && b.x < -14)) {
+            boats[i] = newBoat({ wait: 2 + Math.random() * 6 });
+            continue;
+          }
+          drawBoat(b);
+        }
+        // Gulls from pokes.
+        gulls = gulls.filter(g => (g.life += dt) < 6);
+        for (const g of gulls) {
+          g.x += g.vx * dt;
+          drawGull(g.x, g.y + Math.sin(g.life * 3) * 1.5, Math.floor(g.life * 6) % 2);
+        }
+      }
+
+      // Dolphins (daytime only): one, sometimes a pair, every 7 to 15 seconds.
+      if (day && t > nextDolphin) {
+        nextDolphin = t + 7 + Math.random() * 8;
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const span = 16 + Math.random() * 10;
+        // Open water between the menu (left) and the cliff (right).
+        const x0 = W * 0.38 + Math.random() * Math.max(10, seaEnd - span - 6 - W * 0.38);
+        const y = horizon + 5 + Math.floor(Math.random() * (H - horizon) * 0.45);
+        const h = 7 + Math.random() * 5;
+        dolphins.push({ x0, y, dir, span, h, t: 0, dur: 1.3 });
+        // Seen one (only counts if the page is actually on screen).
+        if (!document.hidden) unlock("dolphin");
+        if (Math.random() < 0.4) dolphins.push({ x0: x0 - dir * 6, y: y + 2, dir, span, h: h * 0.85, t: -0.3, dur: 1.3 });
+      }
+      dolphins = dolphins.filter(d => {
+        d.t += dt;
+        const u = d.t / d.dur;
+        if (u < 0) return true;
+        if (u > 1) {
+          ripples.push({ x: d.x0 + d.dir * d.span, y: d.y, life: 0 }); // the dive
+          return false;
+        }
+        if (d.t - dt <= 0) ripples.push({ x: d.x0, y: d.y, life: 0 }); // the leap
+        drawDolphin(d, u);
+        return true;
+      });
+
+      // The keeper: steps out of the lamp room onto the gallery, waves,
+      // then walks back in and is gone.
+      if (keeper >= 0) {
+        keeper += dt;
+        const k = keeper;
+        const door = gallery.x + 2;
+        const spot = gallery.x + 4;
+        if (k < 0.45) drawKeeper(Math.round(door + (spot - door) * (k / 0.45)), gallery.y, -1);
+        else if (k < 2.6) drawKeeper(spot, gallery.y, Math.floor(k * 5) % 2);
+        else if (k < 3.05) drawKeeper(Math.round(spot - (spot - door) * ((k - 2.6) / 0.45)), gallery.y, -1);
+        else keeper = -1;
+        // Inside the doorway he's behind the lamp room: redraw its frame.
+        if (keeper >= 0 && k > 2.85) {
+          ctx.fillStyle = "#2a2a36";
+          ctx.fillRect(gallery.x + 3, gallery.y - 4, 1, 4);
+        }
+      }
+
+      // Ripples where the sea was poked: flat pixel rings spreading out.
+      ripples = ripples.filter(r => (r.life += dt) < 2.2);
+      const [rr, rg, rb] = P.ripple;
+      for (const r of ripples) {
+        for (const lag of [0, 0.45]) {
+          const life = r.life - lag;
+          if (life <= 0) continue;
+          const rad = 2 + life * 14;
+          const alpha = Math.max(0, 0.55 * (1 - life / 1.7));
+          if (alpha <= 0) continue;
+          ctx.fillStyle = `rgba(${rr}, ${rg}, ${rb}, ${alpha.toFixed(2)})`;
+          const n = Math.max(12, Math.round(rad * 3));
+          for (let k = 0; k < n; k++) {
+            const th = (k / n) * Math.PI * 2;
+            const px = Math.round(r.x + Math.cos(th) * rad);
+            const py = Math.round(r.y + Math.sin(th) * rad * 0.3);
+            if (py > horizon) ctx.fillRect(px, py, 1, 1);
+          }
+        }
+      }
+
+      // The lighthouse's two beams turning round (night only), fading out
+      // while the light is locked onto a menu item.
+      // Frame-rate independent easing, so it's equally smooth at 60 or 144 Hz.
+      aim += (aimGoal - aim) * (1 - Math.exp(-dt * 5));
+      const follow = 1 - Math.exp(-dt * 7);
+      target.x += (targetGoal.x - target.x) * follow;
+      target.y += (targetGoal.y - target.y) * follow;
+      const a = t * 0.55;
+      // The glints dim with the beams while the light is locked on.
+      const fade0 = () => 1 - aim;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (const dir of day ? [] : [0, Math.PI]) {
+        const c = Math.cos(a + dir);
+        const s = Math.sin(a + dir);
+        const len = W * 0.55 * Math.abs(c);
+        const fade = 1 - aim;
+        if (len > 3 && fade > 0.02) {
+          const ex = lamp.x + Math.sign(c) * len;
+          const spread = 3 + 9 * Math.abs(c);
+          const g = ctx.createLinearGradient(lamp.x, 0, ex, 0);
+          const strength = (0.18 + 0.12 * Math.max(0, s)) * fade * GLOW();
+          g.addColorStop(0, `rgba(${BEAM()}, ${strength.toFixed(3)})`);
+          g.addColorStop(1, `rgba(${BEAM()}, 0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.moveTo(lamp.x, lamp.y - 1);
+          ctx.lineTo(ex, lamp.y - spread);
+          ctx.lineTo(ex, lamp.y + spread);
+          ctx.lineTo(lamp.x, lamp.y + 1);
+          ctx.fill();
+        }
+        // Facing us: the lamp flares.
+        if (s > 0.85 && fade > 0.02) {
+          const k = ((s - 0.85) / 0.15) * fade;
+          const rg = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, 4 + k * 10);
+          rg.addColorStop(0, `rgba(${FLARE()}, ${(0.6 * k).toFixed(2)})`);
+          rg.addColorStop(1, `rgba(${FLARE()}, 0)`);
+          ctx.fillStyle = rg;
+          ctx.fillRect(lamp.x - 16, lamp.y - 16, 32, 32);
+        }
+      }
+
+      // The platinum: a path of gold glints on the sea below the light,
+      // twinkling (stepped, like the water) and brightest as a beam swings
+      // round to face us. By day, a soft gold glow round the lamp instead.
+      if (golden && day) {
+        const hg = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, 6);
+        hg.addColorStop(0, "rgba(255, 190, 64, 0.35)");
+        hg.addColorStop(1, "rgba(255, 190, 64, 0)");
+        ctx.fillStyle = hg;
+        ctx.fillRect(lamp.x - 6, lamp.y - 6, 12, 12);
+      } else if (golden) {
+        const face = Math.max(Math.sin(a), Math.sin(a + Math.PI));
+        const step = Math.floor(t * 6);
+        for (let y = horizon + 1; y < H; y++) {
+          const depth = (y - horizon) / Math.max(1, H - horizon);
+          const half = 1 + Math.round(depth * W * 0.06);
+          for (let x = lamp.x - half; x <= lamp.x + half; x++) {
+            // A cheap hash per pixel and step: a few glints on at a time.
+            const h = Math.sin(x * 12.9898 + y * 78.233 + step * 37.719) * 43758.5453;
+            const r = h - Math.floor(h);
+            if (r > 0.9) {
+              const edge = 1 - Math.abs(x - lamp.x) / (half + 1);
+              ctx.fillStyle = `rgba(255, 186, 60, ${((0.25 + 0.45 * face) * edge * (1 - depth * 0.5) * fade0()).toFixed(3)})`;
+              ctx.fillRect(x, y, 1, 1);
+            }
+          }
+        }
+      }
+
+      // Locked on: one beam reaching to the target, with a pool of light
+      // there (night only: P.beam is 0 by day).
+      const am = aim * P.beam;
+      if (am > 0.02) {
+        const dx = target.x - lamp.x;
+        const dy = target.y - lamp.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const nx = -dy / d;
+        const ny = dx / d;
+        const spread = 7;
+        // Runs a little past the target and fades out (no hard end).
+        const ex = lamp.x + dx * 1.25;
+        const ey = lamp.y + dy * 1.25;
+        const g = ctx.createLinearGradient(lamp.x, lamp.y, ex, ey);
+        g.addColorStop(0, `rgba(${BEAM()}, ${(0.32 * am).toFixed(3)})`);
+        g.addColorStop(0.8, `rgba(${BEAM()}, ${(0.1 * am).toFixed(3)})`);
+        g.addColorStop(1, `rgba(${BEAM()}, 0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(lamp.x + nx, lamp.y + ny);
+        ctx.lineTo(ex + nx * spread * 1.25, ey + ny * spread * 1.25);
+        ctx.lineTo(ex - nx * spread * 1.25, ey - ny * spread * 1.25);
+        ctx.lineTo(lamp.x - nx, lamp.y - ny);
+        ctx.fill();
+        const pool = ctx.createRadialGradient(target.x, target.y, 0, target.x, target.y, 22);
+        pool.addColorStop(0, `rgba(${POOL()}, ${(0.2 * am).toFixed(3)})`);
+        pool.addColorStop(1, `rgba(${POOL()}, 0)`);
+        ctx.fillStyle = pool;
+        ctx.fillRect(target.x - 22, target.y - 22, 44, 44);
+        const lg = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, 8);
+        lg.addColorStop(0, `rgba(${FLARE()}, ${(0.45 * am).toFixed(2)})`);
+        lg.addColorStop(1, `rgba(${FLARE()}, 0)`);
+        ctx.fillStyle = lg;
+        ctx.fillRect(lamp.x - 8, lamp.y - 8, 16, 16);
+      }
+      ctx.restore();
+    }
+
+    build();
+    let raf = 0;
+    const t0 = performance.now();
+    let prev = t0;
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      const dt = Math.min(0.1, (now - prev) / 1000);
+      prev = now;
+      if (document.hidden) return;
+      frame((now - t0) / 1000, dt);
+    };
+    if (reduce) frame(2.2);
+    else raf = requestAnimationFrame(loop);
+
+    let resizeTimer = 0;
+    const onResize = () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        build();
+        if (reduce) frame(2.2);
+      }, 150);
+    };
+    // Day/night switched (the platinum's switch): rebuild in the new colours.
+    const onScene = () => {
+      shooting = null;
+      build();
+      if (reduce) frame(2.2);
+    };
+    // Menu selection aims the light; null lets it go.
+    const onAim = (e: Event) => {
+      const d = (e as CustomEvent<{ x: number; y: number } | null>).detail;
+      if (!d) {
+        aimGoal = 0;
+        return;
+      }
+      const p = toCanvas(d.x, d.y);
+      if (aim < 0.05) target = { ...p };
+      targetGoal = p;
+      aimGoal = 1;
+      if (reduce) {
+        aim = 1;
+        target = p;
+        frame(2.2);
+      }
+    };
+    // A poke: sky gets a shooting star (night) or a gull (day), the sea a ripple.
+    const onPoke = (e: Event) => {
+      const d = (e as CustomEvent<{ x: number; y: number }>).detail;
+      const p = toCanvas(d.x, d.y);
+      // Right on the lamp: the keeper comes out to wave.
+      if (Math.abs(p.x - lamp.x) < 7 && Math.abs(p.y - lamp.y) < 6) {
+        if (keeper < 0) keeper = 0;
+        unlock("keeper");
+        if (reduce) {
+          // No animation: show him waving for a moment, then gone.
+          frame(2.2, 1);
+          window.setTimeout(() => {
+            keeper = -1;
+            frame(2.2, 0);
+          }, 2500);
+        }
+        return;
+      }
+      if (p.y < horizon - 2) {
+        if (day) {
+          gulls.push({ x: p.x, y: p.y, vx: (p.x < W / 2 ? 1 : -1) * (14 + Math.random() * 6), life: 0 });
+          unlock("birds");
+        }
+        else {
+          shooting = { x: p.x, y: p.y, vx: -(35 + Math.random() * 20), vy: 14 + Math.random() * 8, life: 0 };
+          unlock("wish");
+        }
+      } else if (p.y > horizon) {
+        ripples.push({ x: p.x, y: p.y, life: 0 });
+        unlock("ripples");
+      }
+    };
+    document.addEventListener("night:aim", onAim);
+    document.addEventListener("night:poke", onPoke);
+    document.addEventListener("scene:change", onScene);
+
+    // Redraw whenever the box changes size (window resize, scrollbar, etc.).
+    const ro = new ResizeObserver(onResize);
+    ro.observe(canvas.parentElement!);
+
+    stop = () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(resizeTimer);
+      ro.disconnect();
+      document.removeEventListener("night:aim", onAim);
+      document.removeEventListener("night:poke", onPoke);
+      document.removeEventListener("scene:change", onScene);
+      document.removeEventListener("ach:platinum", onPlatinum);
+      document.removeEventListener("ach:reset", onReset);
+    };
+  }
+
+  document.addEventListener("astro:page-load", initNight);
+  document.addEventListener("astro:before-swap", () => {
+    stop?.();
+    stop = null;
+  });
+</script>
+
+<style>
+  .night {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+  /* Always fills the box; the low-res drawing is scaled up crisply. */
+  .night canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+</style>

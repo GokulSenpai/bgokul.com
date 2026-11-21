@@ -1,0 +1,23 @@
+---
+/**
+ * One "command + its output" block inside a <CmdWindow>.
+ * Real cmd puts no space between the prompt and the command
+ * (`C:\path>dir`), so neither do we.
+ */
+import CmdPrompt from "./CmdPrompt.astro";
+
+interface Props {
+  prompt: string;
+  cmd: string;
+}
+
+const { prompt, cmd } = Astro.props;
+const hasOutput = Astro.slots.has("default");
+---
+
+<div class="cmd-step" data-cmd-step data-cmd={cmd.toLowerCase()} data-cmd-clearable>
+  <p class="cmd-line">
+    <CmdPrompt path={prompt} /><span data-cmd-typed>{cmd}</span>
+  </p>
+  {hasOutput && <div class="cmd-out"><slot /></div>}
+</div>

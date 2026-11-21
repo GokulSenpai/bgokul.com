@@ -1,0 +1,151 @@
+---
+/**
+ * 17YA -> ILYA. Hover, focus or tap the title and the 1 and the 7 turn
+ * into the letters they stand for.
+ */
+const glyphs = [
+  { from: "1", to: "I" },
+  { from: "7", to: "L" },
+  { from: "Y", to: "Y" },
+  { from: "A", to: "A" },
+];
+---
+
+<figure class="cipher-wrap">
+  <button type="button" class="cipher" data-cipher aria-label="17YA. Press to decode the title.">
+    {
+      glyphs.map(g => (
+        <span class:list={["g", { flips: g.from !== g.to }]} aria-hidden="true">
+          <span class="a">{g.from}</span>
+          <span class="b">{g.to}</span>
+        </span>
+      ))
+    }
+  </button>
+  <figcaption>
+    <span class="hint">Hover or tap the title.</span>
+    <span class="decoded" aria-live="polite" data-cipher-live></span>
+  </figcaption>
+</figure>
+
+<script>
+  function initCipher() {
+    document.querySelectorAll<HTMLButtonElement>("[data-cipher]").forEach(btn => {
+      if (btn.dataset.init) return;
+      btn.dataset.init = "true";
+      const wrap = btn.parentElement!;
+      const live = wrap.querySelector<HTMLElement>("[data-cipher-live]");
+      // Tap/click toggles ILYA on and off, and it stays put. Hover is only a
+      // preview (mouse only, see CSS); turning it off hides it even while the
+      // pointer is still over it, until the pointer leaves.
+      let last = 0;
+      btn.addEventListener("click", () => {
+        if (wrap.classList.contains("is-revealed")) return; // settled for good
+        const now = performance.now();
+        if (now - last < 350) return; // one tap, one toggle
+        last = now;
+        const on = btn.classList.toggle("is-on");
+        btn.classList.toggle("hover-off", !on);
+        if (live) live.textContent = on ? "ILYA." : "";
+      });
+      btn.addEventListener("pointerleave", () => btn.classList.remove("hover-off"));
+
+    });
+  }
+
+  // Once the trigger is pulled (and the clock breaks), the title settles on
+  // ILYA for the rest of the visit: no more flipping back, no hint, no
+  // clickable cursor. One page-level listener that looks the title up when
+  // the event fires, so it can't miss a button set up by an earlier script.
+  document.addEventListener("17ya:trigger", () => {
+    document.querySelectorAll<HTMLButtonElement>("[data-cipher]").forEach(btn => {
+      const wrap = btn.parentElement!;
+      wrap.classList.add("is-revealed");
+      btn.classList.add("is-on");
+      btn.disabled = true; // nothing left to click: plain cursor, out of tab order
+      btn.setAttribute("aria-label", "17YA: ILYA.");
+      const live = wrap.querySelector<HTMLElement>("[data-cipher-live]");
+      if (live) live.textContent = "";
+    });
+  });
+  initCipher();
+  document.addEventListener("astro:page-load", initCipher);
+</script>
+
+<style>
+  .cipher-wrap {
+    margin: 0.5rem 0 0;
+    text-align: center;
+  }
+  .cipher {
+    display: inline-flex;
+    gap: 0.04em;
+    padding: 0.1em 0.2em;
+    border: 0;
+    background: none;
+    color: #f0ead8;
+    font-family: var(--nv-display);
+    font-size: clamp(4.5rem, 16vw, 8rem);
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    perspective: 600px;
+  }
+  .g {
+    position: relative;
+    display: inline-grid;
+  }
+  .g > span {
+    grid-area: 1 / 1;
+    backface-visibility: hidden;
+    transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.2, 1), color 0.6s;
+  }
+  .g .b {
+    transform: rotateX(180deg);
+  }
+  .g:not(.flips) .b {
+    visibility: hidden;
+  }
+  /* ILYA shows when toggled on (tap/click/Enter)... */
+  .cipher.is-on .flips .a {
+    transform: rotateX(-180deg);
+  }
+  .cipher.is-on .flips .b {
+    transform: rotateX(0);
+    color: var(--nv-accent);
+  }
+  /* ...and as a hover preview, but only with a real mouse: on touch screens
+     a tap's sticky "hover" would otherwise show ILYA for a few seconds and
+     then let it fall back, whatever the toggle said. */
+  @media (hover: hover) and (pointer: fine) {
+    .cipher:hover:not(.hover-off) .flips .a {
+      transform: rotateX(-180deg);
+    }
+    .cipher:hover:not(.hover-off) .flips .b {
+      transform: rotateX(0);
+      color: var(--nv-accent);
+    }
+  }
+  /* Stagger: the 7 turns a beat after the 1. */
+  .flips:nth-child(2) > span {
+    transition-delay: 0.12s;
+  }
+  .is-revealed .cipher,
+  .cipher:disabled {
+    cursor: default;
+  }
+  .is-revealed figcaption {
+    visibility: hidden;
+  }
+  figcaption {
+    margin-top: 0.4rem;
+    font-size: 0.8em;
+    font-style: italic;
+    color: var(--nv-muted);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .g > span {
+      transition: none;
+    }
+  }
+</style>

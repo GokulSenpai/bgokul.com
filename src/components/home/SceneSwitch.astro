@@ -1,0 +1,97 @@
+---
+/**
+ * The platinum's reward, on the main menu (top right, beside Ambient mode):
+ * switches the lighthouse scene between Auto (the visitor's clock), Day and
+ * Night. The pick is remembered and applies on every page with the scene
+ * (src/scripts/scene.ts). Hidden until every achievement is found.
+ */
+---
+
+<button type="button" class="scene-switch" data-scene-switch hidden>
+  <span class="ss-kicker" aria-hidden="true">✦</span>
+  <span data-scene-label>Auto</span>
+</button>
+
+<script>
+  import { isPlatinum } from "@/scripts/achievements";
+  import { clockScene, sceneChoice, setSceneChoice, type SceneChoice } from "@/scripts/scene";
+  import { sfx } from "@/components/home/bootSound";
+  import { soundOn } from "@/scripts/cameFrom";
+
+  const ORDER: SceneChoice[] = ["auto", "day", "night"];
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    ctrl?.abort();
+    const btn = document.querySelector<HTMLButtonElement>("[data-scene-switch]");
+    if (!btn) return;
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+    const label = btn.querySelector<HTMLElement>("[data-scene-label]")!;
+
+    const show = () => {
+      btn.hidden = !(isPlatinum() && document.querySelector("[data-night]"));
+      const c = sceneChoice();
+      const name = c === "auto" ? `Auto: ${clockScene() === "day" ? "Day" : "Night"}` : c === "day" ? "Day" : "Night";
+      label.textContent = name;
+      btn.setAttribute("aria-label", `Scene: ${name}. Switch scene`);
+    };
+    show();
+
+    btn.addEventListener(
+      "click",
+      () => {
+        const next = ORDER[(ORDER.indexOf(sceneChoice()) + 1) % ORDER.length];
+        setSceneChoice(next);
+        const scene = next === "auto" ? clockScene() : next;
+        document.documentElement.dataset.scene = scene;
+        document.dispatchEvent(new Event("scene:change"));
+        // A little two-note chime: up for day, down for night.
+        if (soundOn()) sfx(scene === "day" ? [784, 1047] : [784, 587], 0.08, 0.05);
+        show();
+      },
+      { signal }
+    );
+    document.addEventListener("ach:platinum", show, { signal });
+    document.addEventListener("ach:reset", show, { signal });
+  }
+
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  /* Like the Ambient mode window beside it, in the platinum's gold. */
+  .scene-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.85rem 0 0.65rem;
+    border: 2px solid rgb(255 210 122 / 0.55);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.85);
+    box-shadow: 3px 3px 0 rgb(3 4 14 / 0.6);
+    color: #ffd27a;
+    font: inherit;
+    font-size: 0.85rem;
+    text-shadow: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      color 0.15s;
+  }
+  .scene-switch[hidden] {
+    display: none;
+  }
+  .scene-switch:hover,
+  .scene-switch:focus-visible {
+    outline: none;
+    border-color: #ffd27a;
+    color: #fff1c4;
+  }
+  .ss-kicker {
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+</style>

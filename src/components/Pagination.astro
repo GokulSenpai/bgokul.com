@@ -1,0 +1,51 @@
+---
+/**
+ * Previous / next page of a Journal list, as pencil-boxed buttons on the
+ * notebook page (styles: .nb-btn in Notebook).
+ */
+import type { Page } from "astro";
+import type { CollectionEntry } from "astro:content";
+
+type Props = {
+  page: Page<CollectionEntry<"posts">>;
+};
+
+const { page } = Astro.props;
+---
+
+{
+  page.lastPage > 1 && (
+    <nav class="nb-pages" aria-label="Pages">
+      <a
+        class="nb-btn"
+        href={page.url.prev ?? "#"}
+        aria-disabled={page.url.prev ? undefined : "true"}
+        tabindex={page.url.prev ? undefined : -1}
+      >
+        <span aria-hidden="true">◀</span> Newer
+      </a>
+      <span class="nb-note">
+        page {page.currentPage} of {page.lastPage}
+      </span>
+      <a
+        class="nb-btn"
+        href={page.url.next ?? "#"}
+        aria-disabled={page.url.next ? undefined : "true"}
+        tabindex={page.url.next ? undefined : -1}
+      >
+        Older <span aria-hidden="true">▶</span>
+      </a>
+    </nav>
+  )
+}
+
+<style>
+  .nb-pages {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+</style>

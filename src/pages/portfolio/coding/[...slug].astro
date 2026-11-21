@@ -1,0 +1,361 @@
+---
+import { getCollection, render } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import CmdWindow from "@/components/coding/CmdWindow.astro";
+import CmdStep from "@/components/coding/CmdStep.astro";
+import PlayableEmbed from "@/components/PlayableEmbed.astro";
+import RailFence from "@/components/coding/demos/RailFence.astro";
+import { cmdColor } from "@/components/coding/cmdColors";
+import { taglineHtml, taglinePlain } from "@/utils/formatTagline";
+import config from "@/config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("coding");
+  return entries.map(entry => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const {
+  title,
+  kind,
+  tagline,
+  youtubeId,
+  demo,
+  repoUrl,
+  clip,
+  credits,
+  cover,
+  year,
+  tools,
+  features,
+  color,
+} = entry.data;
+const { Content } = await render(entry);
+
+const PARENT = "C:\\bgokul\\portfolio\\coding";
+const CWD = `${PARENT}\\${title}`;
+const videoFile = `${title.replace(/\s+/g, "_")}.mp4`;
+
+// youtube-nocookie + click-to-load facade: nothing from YouTube loads until
+// the visitor actually presses play.
+const embedSrc =
+  youtubeId &&
+  `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1`;
+const poster = cover ?? `https://i.ytimg.com/vi/${youtubeId}/maxresdefault.jpg`;
+const exe = `${title.toLowerCase().replace(/\s+/g, "-")}.exe`;
+
+// What `dir` shows from inside this folder.
+const files = [
+  ...(youtubeId ? [{ name: videoFile }] : []),
+  ...(demo ? [{ name: exe }] : []),
+  ...(clip ? [{ name: "gameplay.webp" }] : []),
+  { name: "info.txt" },
+  { name: "README.txt" },
+  ...(features?.length ? [{ name: "features", dir: true }] : []),
+  ...(tools?.length ? [{ name: "tools.txt" }] : []),
+  ...(credits?.length ? [{ name: "credits.txt" }] : []),
+];
+---
+
+<Layout
+  title={`${title} | ${config.site.title}`}
+  description={tagline ? taglinePlain(tagline) : undefined}
+>
+  <CmdWindow
+    crumbs={[
+      { label: "C:", href: "/" },
+      { label: "portfolio", href: "/portfolio" },
+      { label: "coding", href: "/portfolio/coding" },
+      { label: title },
+    ]}
+    color={cmdColor(color)}
+    cwd={CWD}
+    parentHref="/portfolio/coding"
+    entries={files}
+  >
+    <CmdStep prompt={PARENT} cmd={`cd ${title}`} />
+
+    <CmdStep prompt={CWD} cmd="type info.txt">
+      <h1 class="info-title">
+        {title}
+        {kind && <span class="info-kind cmd-dim">{kind}</span>}
+        {year && <span class="info-kind cmd-dim">{year}</span>}
+      </h1>
+      {tagline && <p class="info-tagline" set:html={taglineHtml(tagline)} />}
+    </CmdStep>
+
+    {
+      clip && (
+        <CmdStep prompt={CWD} cmd="start gameplay.webp">
+          {/* Served untouched (clip.src) so the animation survives; reduced
+              motion gets the still cover instead. */}
+          <picture>
+            {cover && <source media="(prefers-reduced-motion: reduce)" srcset={cover.src} />}
+            <img
+              src={clip.src}
+              width={clip.width}
+              height={clip.height}
+              alt={`${title} gameplay`}
+              loading="lazy"
+              decoding="async"
+              class="clip"
+            />
+          </picture>
+        </CmdStep>
+      )
+    }
+
+    {
+      embedSrc && (
+        <CmdStep prompt={CWD} cmd={`start ${videoFile}`}>
+          <PlayableEmbed
+            src={embedSrc}
+            title={title}
+            cover={poster}
+            label="Click to play . . ."
+            action="watch on YouTube"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          />
+        </CmdStep>
+      )
+    }
+
+    {
+      demo === "rail-fence" && (
+        <CmdStep prompt={CWD} cmd={`${exe} --demo`}>
+          <RailFence />
+        </CmdStep>
+      )
+    }
+
+    <CmdStep prompt={CWD} cmd="type README.txt">
+      <div class="cmd-prose">
+        <Content />
+      </div>
+    </CmdStep>
+
+    {
+      features && features.length > 0 && (
+        <CmdStep prompt={CWD} cmd="tree features">
+          <p class="cmd-dim">{`${CWD}\\FEATURES`.toUpperCase()}</p>
+          <ul class="tree">
+            {features.map((f, i) => {
+              const last = i === features.length - 1;
+              const name = typeof f === "string" ? f : f.name;
+              const items = typeof f === "string" ? [] : f.items;
+              return (
+                <li>
+                  <span class="tree-branch">{last ? "└───" : "├───"}</span>
+                  <span>
+                    {name}
+                    {items.length > 0 && (
+                      <ul class="tree tree-sub">
+                        {items.map((sub, j) => (
+                          <li>
+                            <span class="tree-branch">
+                              {j === items.length - 1 ? "└───" : "├───"}
+                            </span>
+                            <span class="cmd-dim">{sub}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </CmdStep>
+      )
+    }
+
+    {
+      tools && tools.length > 0 && (
+        <CmdStep prompt={CWD} cmd="type tools.txt">
+          <ul class="tree">
+            {tools.map(t => <li class="tool">{t}</li>)}
+          </ul>
+        </CmdStep>
+      )
+    }
+
+    {
+      credits && credits.length > 0 && (
+        <CmdStep prompt={CWD} cmd="type credits.txt">
+          <dl class="credits">
+            {credits.map(c => (
+              <div>
+                <dt class="cmd-dim">{c.label}</dt>
+                <dd>
+                  {c.url ? (
+                    <a href={c.url} target="_blank" rel="noopener noreferrer">
+                      {c.value}
+                    </a>
+                  ) : (
+                    c.value
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </CmdStep>
+      )
+    }
+
+    {
+      repoUrl && (
+        <CmdStep prompt={CWD} cmd="git remote -v">
+          <p class="remote">
+            <span class="cmd-dim">origin</span>
+            <a href={repoUrl} target="_blank" rel="noopener noreferrer">{repoUrl}</a>
+          </p>
+        </CmdStep>
+      )
+    }
+  </CmdWindow>
+</Layout>
+
+<style>
+  .info-title {
+    margin: 0;
+    font: inherit;
+    font-size: 1.5em;
+    line-height: 1.3;
+    color: var(--cmd-hl);
+  }
+  .info-kind {
+    margin-left: 1.5ch;
+    font-size: 0.6em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+  .info-tagline {
+    max-width: 65ch;
+    margin-top: 0.25em !important;
+  }
+  .tree-branch {
+    color: var(--cmd-hl);
+    opacity: 0.7;
+    white-space: pre;
+  }
+  /* Branch art on the left, label on the right, so a long label wraps under
+     itself instead of under the branch. A parent's │ line runs down beside
+     its sub-branches (its own └ hides it on the last item). */
+  .tree li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .tree > li:not(:last-child) > .tree-branch {
+    background: linear-gradient(currentColor, currentColor) 0.5ch 0 / 1px 100% no-repeat;
+  }
+  .tree-sub {
+    margin: 0 !important;
+  }
+  .clip {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 70vh;
+    margin-top: 0.75rem;
+    border: 1px solid var(--cmd-faint);
+  }
+
+  .credits {
+    margin: 0;
+  }
+  .credits > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .credits > div + div {
+    margin-top: 0.4em;
+  }
+  @media (min-width: 640px) {
+    .credits > div {
+      grid-template-columns: 10ch minmax(0, 1fr);
+      gap: 2ch;
+    }
+  }
+  .credits dd {
+    margin: 0;
+  }
+
+  .remote {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2ch;
+  }
+  .remote a {
+    overflow-wrap: anywhere;
+  }
+  .tool::before {
+    content: "• ";
+    color: var(--cmd-hl);
+  }
+
+  .tree {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* README.txt: the MDX write-up, flattened to plain console text.
+     Headings become batch-file comments (":: Overview"). */
+  .cmd-prose {
+    max-width: 72ch;
+    line-height: 1.7;
+  }
+  /* Section headings: a clear break above, a thin rule under, then the text. */
+  .cmd-prose :global(h2),
+  .cmd-prose :global(h3) {
+    width: fit-content;
+    margin: 2.5em 0 0;
+    padding-bottom: 0.2em;
+    border-bottom: 1px solid var(--cmd-faint);
+    font: inherit;
+    color: var(--cmd-hl);
+  }
+  .cmd-prose :global(h2:first-child),
+  .cmd-prose :global(h3:first-child) {
+    margin-top: 0;
+  }
+  .cmd-prose :global(h2)::before,
+  .cmd-prose :global(h3)::before {
+    content: ":: ";
+    color: var(--cmd-dim);
+  }
+  /* Body blocks: one blank line between paragraphs (as cmd would print),
+     a little more room straight after a heading. Block-level only, so
+     inline bits like links and bold text are never pushed apart. */
+  .cmd-prose :global(p),
+  .cmd-prose :global(ul),
+  .cmd-prose :global(ol) {
+    margin: 1.1em 0 0;
+  }
+  .cmd-prose :global(p:first-child),
+  .cmd-prose :global(ul:first-child),
+  .cmd-prose :global(ol:first-child) {
+    margin-top: 0;
+  }
+  .cmd-prose :global(:is(h2, h3) + :is(p, ul, ol)) {
+    margin-top: 0.9em;
+  }
+  .cmd-prose :global(ul) {
+    padding: 0;
+    list-style: none;
+  }
+  .cmd-prose :global(ul li)::before {
+    content: "- ";
+  }
+  .cmd-prose :global(li + li) {
+    margin-top: 0;
+  }
+  .cmd-prose :global(code) {
+    color: var(--cmd-bright);
+  }
+</style>

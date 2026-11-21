@@ -1,0 +1,1765 @@
+---
+/**
+ * Home: the site's main menu, like a game's title screen. Your name types
+ * out, the menu is the site's navigation (so no top bar here), a pixel-art
+ * night scene plays behind it (see components/home/NightScene.astro), and a loading-screen "Tip" line rotates along the bottom.
+ * Arrow keys move through the menu and Enter opens the selected item.
+ *
+ * Two easter eggs:
+ *  - Boot sequence: plays once on a visitor's first visit (localStorage),
+ *    old-console style, ending on "Press any key". Pressing 0 on the menu replays it.
+ *  - Quit: refuses to quit, harder each time, then fakes a shutdown.
+ *
+ *
+ */
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { Font } from "astro:assets";
+import NightScene from "@/components/home/NightScene.astro";
+import SceneSwitch from "@/components/home/SceneSwitch.astro";
+import Layout from "@/layouts/Layout.astro";
+import TypewriterHeading from "@/components/TypewriterHeading.astro";
+import ComeBackTitle from "@/components/ComeBackTitle.astro";
+import { homeTips } from "@/data/homeTips";
+import config from "@/config";
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const homePath = getRelativeLocaleUrl(locale, "");
+
+const menu = [
+  { label: "Start", hint: "Portfolio: games, stories and code", href: "/portfolio" },
+  { label: "Resume", hint: "Written as patch notes", href: "/resume" },
+  { label: "Journal", hint: "Blog", href: getRelativeLocaleUrl(locale, "blog") },
+  { label: "Contact", hint: "Business card", href: "/contact" },
+  // The hint shows the visitor's progress (filled in by script: it lives
+  // in their browser).
+  { label: "Achievements", hint: "Things to find", href: "/achievements" },
+];
+
+// The boot logo: a 5x5 pixel "G".
+const logoGrid = [".####", "#....", "#.###", "#...#", ".###."];
+let cell = 0;
+const logoCells = logoGrid.flatMap(row => [...row].map((c, col) => ({ i: c === "#" ? cell++ : -1, col })));
+
+// Save files the boot screen "finds" (the Portfolio's sections).
+const saveCount = 4;
+const year = new Date().getFullYear();
+
+// The boot screen plays on the first visit only (and after the Quit gag's
+// fake shutdown, and on 0). true plays it every time home loads: for
+// testing only.
+const ALWAYS_BOOT = false;
+---
+
+<Layout>
+  <Fragment slot="head">
+    <Font cssVariable="--font-console" preload={[{ subset: "latin", weight: 600, style: "normal" }]} />
+    <Font cssVariable="--font-pixel" preload={[{ subset: "latin", weight: 500, style: "normal" }]} />
+  </Fragment>
+
+  <!-- First visit? Mark it before paint so the boot screen covers the menu. -->
+  <script is:inline define:vars={{ always: ALWAYS_BOOT }}>
+    try {
+      if (always || !localStorage.getItem("bootSeen")) {
+        // Seen as soon as it starts: leaving mid-boot doesn't replay it.
+        localStorage.setItem("bootSeen", "1");
+        // Browsers block sound until the visitor presses something. If that
+        // hasn't happened yet (and sound isn't switched off), start on a
+        // "standby" screen: pressing any button powers on, with the jingle.
+        const canPlay = navigator.userActivation ? navigator.userActivation.hasBeenActive : false;
+        const soundOff = localStorage.getItem("titleSound") === "off";
+        document.documentElement.dataset.boot = canPlay || soundOff ? "" : "standby";
+      }
+    } catch {}
+  </script>
+
+  <div class="boot" data-boot-screen aria-hidden="true">
+    <!-- Boot screen (first visit only): power on, pixel logo, memory check, Press start. -->
+    <div class="standby">
+      <span class="led"></span>
+      <p class="standby-text">
+        <span class="press-key">Press any key to power on</span>
+        <span class="press-touch">Tap to power on</span>
+      </p>
+      <p class="standby-sub">Best with sound</p>
+    </div>
+    <div class="crt"></div>
+    <div class="boot-inner">
+      <div class="mark">
+        {logoCells.map(({ i, col }) => (i < 0 ? <span /> : <span class="px" style={`--i:${i}; --c:${col}`} />))}
+      </div>
+      <p class="word">bgokul</p>
+      <p class="sub">Games and stories</p>
+      <div class="legal">
+        <p>© {year} Gokul Naga Sai</p>
+        <p>Licensed by absolutely no one</p>
+      </div>
+      <p class="memory">
+        <span class="check">Checking memory card…</span>
+        <span class="found">{saveCount} save files found</span>
+      </p>
+      <p class="press">
+        <span class="press-key">Press any key</span>
+        <span class="press-touch">Tap to start</span>
+      </p>
+    </div>
+    <div class="scan"></div>
+  </div>
+
+  <main
+    id="main-content"
+    data-layout="index"
+    data-home-path={homePath}
+    class="title-screen"
+    data-title-screen
+  >
+    <!-- Pixel-art night scene: sea, moon, a lighthouse sweeping its beam -->
+    <div class="bg" aria-hidden="true">
+      <NightScene />
+      <div class="shade"></div>
+    </div>
+
+    <div class="content">
+      <div class="logo">
+        <TypewriterHeading class="whitespace-nowrap" />
+      </div>
+      <p class="tagline">
+        I make games, write stories, and spend an unreasonable amount of time
+        convincing myself I should learn yet another creative skill.
+      </p>
+
+      <nav class="menu" aria-label="Main menu">
+        <ul>
+          {menu.map((m, i) => (
+            <li style={`--n:${i}`}>
+              <a href={m.href} class:list={["item", { "is-active": i === 0 }]} data-item>
+                <span class="marker" aria-hidden="true">▶</span>
+                <span class="label">{m.label}</span>
+                <span class="hint">{m.hint}</span>
+              </a>
+            </li>
+          ))}
+          <li style={`--n:${menu.length}`}>
+            <button type="button" class="item item--quit" data-item data-quit>
+              <span class="marker" aria-hidden="true">▶</span>
+              <span class="label">Quit</span>
+              <span class="hint" data-quit-hint>Exit to desktop</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="bar">
+      <p class="tip">
+        <span class="tip-label">Tip</span>
+        <span class="tip-text" data-tip data-tips={JSON.stringify(homeTips)} aria-live="polite">{homeTips[0]}</span>
+      </p>
+      <div class="bar-end">
+        <button type="button" class="sound" data-sound aria-pressed="false">
+          <span class="sound-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span data-sound-label>Sound off</span>
+        </button>
+        <p class="build">Build 4.0</p>
+      </div>
+    </div>
+
+    <!-- Top right: the platinum's day/night switch (hidden until then), and
+         ambient mode (hide all the UI, go fullscreen, just the scene). -->
+    <div class="hud-tr">
+      <SceneSwitch />
+      <button type="button" class="ambient-btn" data-ambient title="Hide everything and go fullscreen. Esc to exit.">
+        <span class="amb-icon" aria-hidden="true">⛶</span> Ambient mode
+      </button>
+    </div>
+    <button type="button" class="ambient-exit" data-ambient-exit aria-label="Exit ambient mode">✕</button>
+    <p class="ambient-hint" data-ambient-hint aria-live="polite"></p>
+
+    <!-- Quit confirmation, which never quite agrees to quit -->
+    <dialog class="quit" data-quit-dialog aria-labelledby="quit-title">
+      <p class="quit-kicker">System</p>
+      <h2 id="quit-title" class="quit-title">Quit to desktop?</h2>
+      <p class="quit-line" data-quit-line aria-live="polite">Any unsaved progress will be lost.</p>
+      <div class="quit-actions">
+        <button type="button" class="quit-btn" data-quit-yes>Yes</button>
+        <button type="button" class="quit-btn quit-btn--main" data-quit-no autofocus>No</button>
+      </div>
+    </dialog>
+
+    <!-- The fake shutdown -->
+    <div class="off" data-off aria-hidden="true">
+      <p class="off-text" data-off-text></p>
+    </div>
+  </main>
+  <ComeBackTitle />
+</Layout>
+
+<script>
+  import * as music from "@/components/home/titleMusic";
+  import { playBootSound, stopBootSound, sfx } from "@/components/home/bootSound";
+  import { unlock, count, has, isPlatinum, sawBoot, ACHIEVEMENTS } from "@/scripts/achievements";
+  import { navigate } from "astro:transitions/client";
+  import { wheelSelect } from "@/scripts/wheelSelect";
+
+  let cleanup: ((to?: string) => void) | null = null;
+
+  // Each menu item has its own note when the theme is playing.
+  const MENU_NOTES = [659.25, 783.99, 880, 1046.5, 587.33];
+
+  const QUIT_LINES = [
+    "Quit? I'm not a quitter.",
+    "I get shit done. Pick something else.",
+    "Quitting isn't in this build. I checked the patch notes.",
+    "That's four tries. Imagine putting this energy into a game jam.",
+    "Fine. You asked for it.",
+  ];
+  const YES_LABELS = ["Yes", "Yes, really", "YES", "Please", "…"];
+  const AFTER_LINES = ["We've been through this.", "Still here. Still not quitting.", "Nice try."];
+
+  function initTitle() {
+    const root = document.querySelector<HTMLElement>("[data-title-screen]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+
+    // Remember home as the "back" target (kept from the old home page).
+    const baseRoot = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+    sessionStorage.setItem("backUrl", root.dataset.homePath ?? baseRoot);
+
+    const ac = new AbortController();
+    const { signal } = ac;
+    const timers: number[] = [];
+    const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, ms));
+    const html = document.documentElement;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // ── Boot sequence ────────────────────────────────────────────
+    const boot = document.querySelector<HTMLElement>("[data-boot-screen]")!;
+    let bootState: "off" | "standby" | "playing" | "ready" = "off";
+    const BOOT_MS = reduce ? 0 : 4600;
+
+    const bootReady = () => {
+      if (bootState !== "playing") return;
+      bootState = "ready";
+      boot.classList.add("is-ready");
+    };
+    const playBoot = () => {
+      html.dataset.boot = "";
+      boot.classList.remove("is-ready", "is-leaving");
+      // Restart the CSS animations.
+      boot.style.display = "none";
+      void boot.offsetWidth;
+      boot.style.display = "";
+      bootState = "playing";
+      root.inert = true;
+      if (wantSound()) playBootSound();
+      later(bootReady, BOOT_MS);
+      sawBoot(); // the second time is "Encore"
+    };
+    // Standby -> power on: the boot animation starts now, with the jingle.
+    const powerOn = () => {
+      html.dataset.boot = "";
+      bootState = "playing";
+      if (wantSound()) playBootSound();
+      later(bootReady, BOOT_MS);
+      sawBoot();
+    };
+    const leaveBoot = () => {
+      bootState = "off";
+      root.inert = false;
+      try {
+        localStorage.setItem("bootSeen", "1");
+      } catch {}
+      sfx([880, 1318.51, 1760], 0.11, 0.07); // A E A: Press start
+      if (wantSound()) startSound();
+      boot.classList.add("is-leaving");
+      root.classList.add("is-entering");
+      // The name starts its cycle fresh, from "Gokul Naga Sai", as the menu appears.
+      document.dispatchEvent(new Event("typewriter:restart"));
+      later(() => {
+        delete html.dataset.boot;
+        boot.classList.remove("is-leaving", "is-ready");
+        items[cur]?.focus({ preventScroll: true });
+      }, reduce ? 0 : 1300);
+      later(() => root.classList.remove("is-entering"), reduce ? 0 : 2600);
+    };
+    // Any press: skip to "Press start", then a second press starts.
+    const bootPress = (e: Event) => {
+      if (bootState === "off") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (bootState === "standby") powerOn();
+      else if (bootState === "playing") {
+        bootState = "ready";
+        boot.classList.add("is-ready");
+      } else leaveBoot();
+    };
+    if (html.dataset.boot === "standby") {
+      bootState = "standby";
+      root.inert = true;
+    } else if ("boot" in html.dataset) {
+      bootState = "playing";
+      root.inert = true;
+      if (wantSound()) playBootSound();
+      later(bootReady, BOOT_MS);
+      sawBoot();
+    } else if (!reduce) {
+      // Arriving from another page: the scene fades up and the menu rises
+      // in, the same entrance as after the boot screen, just sooner.
+      root.classList.add("is-entering", "is-arriving");
+      later(() => root.classList.remove("is-entering", "is-arriving"), 1700);
+    }
+    boot.addEventListener("pointerdown", bootPress, { signal });
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (bootState !== "off" && !e.repeat && !["Tab", "Shift", "Alt", "Control", "Meta"].includes(e.key)) bootPress(e);
+      },
+      { signal, capture: true }
+    );
+
+    // ── Menu ─────────────────────────────────────────────────────
+    const items = [...root.querySelectorAll<HTMLElement>("[data-item]")];
+    // Achievements: the hint shows this visitor's progress.
+    const achHint = root.querySelector<HTMLElement>('a[href="/achievements"] .hint');
+    const showProgress = () => {
+      if (achHint) achHint.textContent = isPlatinum() ? "All found ★" : `${count()} of ${ACHIEVEMENTS.length} found`;
+    };
+    showProgress();
+    // …and keep it current: achievements found right here on the menu (the
+    // keeper, ripples, a wish, Quit…) count up straight away.
+    document.addEventListener("ach:unlock", showProgress, { signal });
+    document.addEventListener("ach:reset", showProgress, { signal });
+    let cur = 0;
+
+    // The lighthouse beam swings onto the selected item, then goes back
+    // to sweeping after a few idle seconds.
+    let aimTimer = 0;
+    const aimAt = (el: HTMLElement | null, hold = 5000) => {
+      window.clearTimeout(aimTimer);
+      let detail: { x: number; y: number } | null = null;
+      if (el) {
+        const r = el.querySelector(".label")!.getBoundingClientRect();
+        detail = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        aimTimer = window.setTimeout(() => aimAt(null), hold);
+      }
+      document.dispatchEvent(new CustomEvent("night:aim", { detail }));
+    };
+
+    // One highlighted item at a time, moved by mouse, focus or arrows.
+    const select = (i: number, focus = false) => {
+      const prev = cur;
+      cur = (i + items.length) % items.length;
+      items.forEach((el, j) => el.classList.toggle("is-active", j === cur));
+      if (focus) items[cur].focus();
+      aimAt(items[cur]);
+      if (prev !== cur) music.bell(MENU_NOTES[cur], 0.03);
+    };
+    items.forEach((el, i) => {
+      el.addEventListener("pointerenter", () => select(i), { signal });
+      el.addEventListener("focus", () => select(i), { signal });
+    });
+
+    // Choosing an item (not Quit): a confirm chime, the item blinks like an
+    // old game menu, the scene fades to black, then the next page opens.
+    let going = false;
+    items.forEach((el, i) => {
+      if (!(el instanceof HTMLAnchorElement)) return;
+      el.addEventListener(
+        "click",
+        e => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          if (going) return;
+          going = true;
+          select(i);
+          window.clearTimeout(aimTimer);
+          sfx([880, 1318.51], 0.08, 0.06);
+          // Loading into a section: the theme fades out (it carries on to
+          // the save screen, which is part of the menu).
+          if (!music.isMenuPath(new URL(el.href).pathname)) music.stop();
+          el.classList.add("is-chosen");
+          root.classList.add("is-going");
+          later(() => navigate(el.href), reduce ? 0 : 750);
+        },
+        { signal }
+      );
+    });
+
+    root.querySelector(".menu")!.addEventListener("pointerleave", () => aimAt(items[cur], 1200), { signal });
+    // The mouse wheel moves through the menu too (not during the boot
+    // screen, the quit box, the fake shutdown or ambient mode).
+    wheelSelect(
+      dir => select(cur + dir, true),
+      signal,
+      () => bootState === "off" && !dialog.open && !root.classList.contains("is-off") && !ambient
+    );
+
+    // ── Ambient mode ─────────────────────────────────────────────
+    // Hides the name, menu and panels, goes fullscreen, and leaves just the
+    // living scene (and the music). Esc, leaving fullscreen, or the ✕ on
+    // touch screens brings everything back.
+    const ambBtn = root.querySelector<HTMLButtonElement>("[data-ambient]")!;
+    const ambExit = root.querySelector<HTMLButtonElement>("[data-ambient-exit]")!;
+    const ambHint = root.querySelector<HTMLElement>("[data-ambient-hint]")!;
+    const content = root.querySelector<HTMLElement>(".content")!;
+    let ambient = false;
+    let seaTimer = 0;
+    const enterAmbient = () => {
+      if (ambient) return;
+      ambient = true;
+      // A whole minute of just watching: an achievement.
+      seaTimer = window.setTimeout(() => ambient && unlock("sea"), 60000);
+      timers.push(seaTimer);
+      root.classList.add("is-ambient");
+      html.classList.add("ambient");
+      content.inert = true;
+      aimAt(null);
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      ambHint.textContent = matchMedia("(hover: none)").matches ? "Tap ✕ to exit" : "Press Esc to exit";
+      ambHint.classList.remove("is-shown");
+      void ambHint.offsetWidth;
+      ambHint.classList.add("is-shown");
+    };
+    const exitAmbient = () => {
+      if (!ambient) return;
+      ambient = false;
+      window.clearTimeout(seaTimer);
+      root.classList.remove("is-ambient");
+      html.classList.remove("ambient");
+      content.inert = false;
+      ambHint.classList.remove("is-shown");
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      ambBtn.focus({ preventScroll: true });
+    };
+    ambBtn.addEventListener("click", enterAmbient, { signal });
+    ambExit.addEventListener("click", exitAmbient, { signal });
+    document.addEventListener(
+      "fullscreenchange",
+      () => {
+        if (!document.fullscreenElement) exitAmbient();
+      },
+      { signal }
+    );
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (ambient && e.key === "Escape") exitAmbient();
+      },
+      { signal }
+    );
+
+    // ── Title theme ──────────────────────────────────────────────
+    const soundBtn = root.querySelector<HTMLButtonElement>("[data-sound]")!;
+    const soundLabel = root.querySelector<HTMLElement>("[data-sound-label]")!;
+    function wantSound() {
+      try {
+        return localStorage.getItem("titleSound") !== "off";
+      } catch {
+        return true;
+      }
+    }
+    const showSound = () => {
+      const on = music.isPlaying();
+      soundBtn.setAttribute("aria-pressed", String(on));
+      soundBtn.classList.toggle("is-on", on);
+      soundLabel.textContent = on ? "Sound on" : "Sound off";
+    };
+    function startSound() {
+      music.start();
+      showSound();
+    }
+    soundBtn.addEventListener(
+      "click",
+      () => {
+        const on = !music.isPlaying();
+        if (on) music.start();
+        else music.stop();
+        try {
+          localStorage.setItem("titleSound", on ? "on" : "off");
+        } catch {}
+        showSound();
+        // Off: a party pooper. Back on again after that: a change of heart.
+        if (!on) unlock("party-pooper");
+        else if (has("party-pooper")) unlock("change-of-heart");
+      },
+      { signal }
+    );
+    // No boot screen? Start the theme on the first key press or tap
+    // (browsers need one), unless it was switched off before.
+    const firstTouch = (e: Event) => {
+      if (bootState !== "off" || music.isPlaying() || !wantSound()) return;
+      if ((e.target as HTMLElement).closest("[data-sound]")) return;
+      startSound();
+    };
+    document.addEventListener("pointerdown", firstTouch, { signal, once: true });
+    document.addEventListener("keydown", firstTouch, { signal, once: true });
+    // Coming back to home from another page: the browser already allows
+    // sound (the visitor has clicked on the site), so fade the theme
+    // straight in if it's on, without waiting for another press.
+    if (bootState === "off" && wantSound() && navigator.userActivation?.hasBeenActive) startSound();
+
+    // ── Poking the scene: ripples on the sea, shooting stars in the sky ──
+    root.addEventListener(
+      "pointerdown",
+      e => {
+        if ((e.target as HTMLElement).closest("a, button, dialog, .tagline, .logo")) return;
+        document.dispatchEvent(new CustomEvent("night:poke", { detail: { x: e.clientX, y: e.clientY } }));
+        music.bell(undefined, 0.04);
+      },
+      { signal }
+    );
+
+    const dialog = root.querySelector<HTMLDialogElement>("[data-quit-dialog]")!;
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (e.altKey || e.ctrlKey || e.metaKey || dialog.open || root.classList.contains("is-off") || ambient) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          select(cur + 1, true);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          select(cur - 1, true);
+        } else if (e.key === "Enter" && !items.includes(document.activeElement as HTMLElement)) {
+          items[cur].click();
+        } else if (e.key === "0" && !(e.target as HTMLElement).closest("input, textarea")) {
+          playBoot();
+        }
+      },
+      { signal }
+    );
+
+    // ── Quit ─────────────────────────────────────────────────────
+    const quitBtn = root.querySelector<HTMLButtonElement>("[data-quit]")!;
+    const quitHint = root.querySelector<HTMLElement>("[data-quit-hint]")!;
+    const line = dialog.querySelector<HTMLElement>("[data-quit-line]")!;
+    const yes = dialog.querySelector<HTMLButtonElement>("[data-quit-yes]")!;
+    const no = dialog.querySelector<HTMLButtonElement>("[data-quit-no]")!;
+    const offText = root.querySelector<HTMLElement>("[data-off-text]")!;
+    let tries = 0;
+    let shutdownDone = false;
+    let after = 0;
+
+    const say = (text: string) => {
+      line.textContent = text;
+      dialog.classList.remove("is-shake");
+      void dialog.offsetWidth;
+      dialog.classList.add("is-shake");
+    };
+
+    quitBtn.addEventListener(
+      "click",
+      () => {
+        tries = 0;
+        yes.textContent = YES_LABELS[0];
+        line.textContent = shutdownDone
+          ? AFTER_LINES[after++ % AFTER_LINES.length]
+          : "Any unsaved progress will be lost.";
+        yes.hidden = shutdownDone;
+        no.textContent = shutdownDone ? "Fine" : "No";
+        dialog.showModal();
+        sfx([659.25], 0, 0.05); // E: the quit box opens
+        unlock("rage-quit");
+      },
+      { signal }
+    );
+    no.addEventListener("click", () => dialog.close(), { signal });
+    // Arrows move between the buttons (like any game's Yes/No box); Enter
+    // or Space press the one selected (the browser does that part).
+    dialog.addEventListener(
+      "keydown",
+      e => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+        e.preventDefault();
+        const btns = [yes, no].filter(b => !b.hidden);
+        const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+        const dir = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1;
+        const next = btns[(Math.max(i, 0) + dir + btns.length) % btns.length];
+        if (next !== document.activeElement) {
+          next.focus();
+          sfx([880], 0, 0.03);
+        }
+      },
+      { signal }
+    );
+    dialog.addEventListener(
+      "click",
+      e => {
+        if (e.target === dialog) dialog.close();
+      },
+      { signal }
+    );
+    dialog.addEventListener("close", () => quitBtn.focus({ preventScroll: true }), { signal });
+
+    yes.addEventListener(
+      "click",
+      () => {
+        const text = QUIT_LINES[tries];
+        tries++;
+        sfx([[587.33, 523.25, 440, 392, 329.63][tries - 1] ?? 329.63], 0, 0.05); // falling A minor, each refusal
+        if (tries < QUIT_LINES.length) {
+          say(text);
+          yes.textContent = YES_LABELS[tries] ?? "…";
+          return;
+        }
+        // Last line: actually "quit". Power off, sit in the dark, come back.
+        say(text);
+        yes.disabled = true;
+        later(() => {
+          dialog.close();
+          yes.disabled = false;
+          shutdownDone = true;
+          quitHint.textContent = "Don't.";
+          offText.textContent = "";
+          root.classList.add("is-off");
+          later(() => (offText.textContent = "Quit failed."), reduce ? 200 : 1500);
+          later(() => (offText.textContent = "Nobody quits here. Returning to main menu…"), reduce ? 1200 : 2900);
+          // …and it starts up again, the whole way: the boot screen, the
+          // jingle, "Press start". (Press start brings the menu back.)
+          later(() => {
+            root.classList.remove("is-off");
+            select(0);
+            playBoot();
+            unlock("nobody-quits");
+          }, reduce ? 2400 : 4800);
+        }, 900);
+      },
+      { signal }
+    );
+
+    // ── Tips ─────────────────────────────────────────────────────
+    const tipEl = root.querySelector<HTMLElement>("[data-tip]")!;
+    const tips: string[] = JSON.parse(tipEl.dataset.tips || "[]");
+    const tipBox = tipEl.closest<HTMLElement>(".tip")!;
+    // {other} becomes the other time of day from the current scene.
+    const tipText = (tip: string) =>
+      tip.replace("{other}", html.dataset.scene === "day" ? "after dark" : "in daylight");
+    let t = 0;
+    const timer = window.setInterval(() => {
+      if (document.hidden || tips.length < 2) return;
+      t = (t + 1) % tips.length;
+      if (reduce) {
+        tipEl.textContent = tipText(tips[t]);
+        return;
+      }
+      tipBox.classList.add("is-out");
+      window.setTimeout(() => {
+        tipEl.textContent = tipText(tips[t]);
+        tipBox.classList.remove("is-out");
+      }, 500);
+    }, 6000);
+
+    cleanup = (to?: string) => {
+      ac.abort();
+      window.clearTimeout(aimTimer);
+      html.classList.remove("ambient");
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      if (!to || !music.isMenuPath(to)) music.stop();
+      stopBootSound();
+      window.clearInterval(timer);
+      timers.forEach(window.clearTimeout);
+      if (dialog.open) dialog.close();
+      delete html.dataset.boot;
+    };
+  }
+
+  document.addEventListener("astro:page-load", initTitle);
+  document.addEventListener("astro:before-swap", e => {
+    cleanup?.(e.to?.pathname);
+    cleanup = null;
+  });
+</script>
+
+<style>
+  /* Full screen, no scrolling, no scrollbar. */
+  :global(html:has(.title-screen)) {
+    overflow-y: auto;
+  }
+  :global(html[data-boot]) {
+    overflow: hidden;
+  }
+  .title-screen {
+    /* The scene reacts to clicks (sky, sea, the lighthouse lamp): an amber
+       sparkle cursor says so. Links and buttons still get the hand. */
+    cursor: url("/cursors/sparkle.svg") 12 10, crosshair;
+    --pad: clamp(1.25rem, 5vw, 5rem);
+    /* Colours taken from the night scene: the lighthouse lamp (accent),
+       the moon (text) and the dusk sky (quiet text). */
+    --acc: #ffd27a;
+    --moon: #efecdc;
+    --dusk: #9aa0d6;
+    --night: #07081a;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+    --lit: var(--hard), 0 0 18px rgb(255 210 122 / 0.45);
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100svh;
+    padding: clamp(2rem, 8vh, 5rem) var(--pad) 0;
+    overflow: hidden;
+    color: var(--moon);
+    font-family: var(--font-pixel), var(--font-console), monospace;
+    /* The pixel font's "fi" ligature reads like an "A". */
+    font-variant-ligatures: none;
+  }
+
+  /* Daytime (see NightScene): deep navy text with a soft light drop shadow
+     so it reads on the bright sky. The selection stays lamp amber, outlined
+     in navy. */
+  :global(html[data-scene="day"]) .title-screen {
+    --moon: #13213f;
+    --dusk: #1d3566;
+    --hard: 0.07em 0.07em 0 rgb(255 255 255 / 0.35);
+    --lit: 0.07em 0.07em 0 #13213f, 0 0 14px rgb(255 255 255 / 0.6);
+  }
+  :global(html[data-scene="day"]) .item:not(.is-active) {
+    color: color-mix(in srgb, var(--moon) 80%, transparent);
+  }
+  /* The small text floats over the dithered sky and clouds. A hard white
+     outline blurred the thin pixel letters, so: solid navy, a touch bolder,
+     on a soft white halo that quiets the dither behind it. */
+  :global(html[data-scene="day"]) :is(.tagline, .hint) {
+    color: #0f1b36;
+    font-weight: 600;
+    text-shadow:
+      0 0 3px rgb(255 255 255 / 0.95),
+      0 0 8px rgb(255 255 255 / 0.75),
+      0 0 16px rgb(255 255 255 / 0.5);
+  }
+  /* By day the selection is a JRPG-style cursor bar: warm cream text on
+     solid navy. (Gold text on the blue sky vibrated.) */
+  :global(html[data-scene="day"]) .item.is-active {
+    color: var(--moon);
+    text-shadow: none;
+  }
+  :global(html[data-scene="day"]) .item.is-active .label {
+    /* The bar's padding is taken back by the margin, so selecting an item
+       never changes its height (and the centred menu never shifts). */
+    margin: -0.05em 0 -0.1em -0.3em;
+    padding: 0.05em 0.3em 0.1em;
+    border-radius: 3px;
+    background: #13213f;
+    color: #ffe9b0;
+    box-shadow: 3px 3px 0 rgb(19 33 63 / 0.3);
+  }
+  :global(html[data-scene="day"]) .item:focus-visible .label {
+    text-decoration: none;
+  }
+  :global(html[data-scene="day"]) .marker {
+    color: #13213f;
+  }
+
+  /* The bottom bar sits on the sea: navy "dialog box" panels behind it,
+     so the tip and controls read whatever passes behind them. */
+  :global(html[data-scene="day"]) :is(.tip, .bar-end) {
+    padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+    border-radius: 4px;
+    /* Navy panels with cream text, like the cursor bar and save windows. */
+    background: rgb(19 33 63 / 0.9);
+    box-shadow: 3px 3px 0 rgb(19 33 63 / 0.3);
+    color: #f3efe2;
+    text-shadow: none;
+    /* Both panels the same height. */
+    display: flex;
+    align-items: center;
+    min-height: 2.4rem;
+    box-sizing: border-box;
+  }
+  :global(html[data-scene="day"]) .bar-end {
+    padding-left: 0.75rem;
+  }
+  :global(html[data-scene="day"]) .sound {
+    min-height: 0;
+  }
+  :global(html[data-scene="day"]) :is(.sound, .build) {
+    color: #f3efe2;
+  }
+  :global(html[data-scene="day"]) .sound:is(:hover, :focus-visible, :global(.is-on)) {
+    color: #ffe9b0;
+  }
+  :global(html[data-scene="day"]) .shade {
+    background:
+      linear-gradient(90deg, rgb(255 255 255 / 0.4) 0%, rgb(255 255 255 / 0.18) 38%, transparent 62%),
+      linear-gradient(0deg, rgb(16 40 72 / 0.3) 0%, transparent 22%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.05) 0 1px, transparent 1px 3px);
+  }
+  /* The quit box keeps its night colours (it's a navy window), day or night. */
+  .quit {
+    --moon: #efecdc;
+    --dusk: #9aa0d6;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+  }
+
+  /* Background: the scene (drawn on a canvas, see NightScene). */
+  .bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: #04050c;
+  }
+  /* Dark on the left where the menu sits, a vignette all round. */
+  .shade {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgb(4 5 12 / 0.75) 0%, rgb(4 5 12 / 0.45) 38%, transparent 62%),
+      linear-gradient(0deg, rgb(4 5 12 / 0.7) 0%, transparent 22%),
+      radial-gradient(ellipse 120% 100% at 60% 50%, transparent 55%, rgb(0 0 0 / 0.55) 100%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+  }
+
+  /* Centred in the space above the bottom bar. */
+  /* Pinned left like a game's title menu (not centred), so on wide
+     screens it stays over the shaded left side. Centred vertically above
+     the bottom bar. */
+  .content {
+    width: 100%;
+    max-width: 72rem;
+    margin: auto auto auto 0;
+  }
+  /* The name: pixel type in moonlight, with a hard retro drop shadow
+     and a faint warm glow from the lamp. */
+  .logo :global(h1) {
+    margin: 0;
+    color: var(--moon);
+    font-family: var(--font-pixel), monospace;
+    font-size: clamp(2.4rem, 7vw, 5.6rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: 0.01em;
+    text-shadow:
+      var(--hard),
+      0 0 30px rgb(255 214 140 / 0.12);
+  }
+  .logo :global(.typewriter-cursor) {
+    color: var(--acc);
+    font-weight: 400;
+    text-shadow: 0 0 14px rgb(255 210 122 / 0.6);
+  }
+  .tagline {
+    max-width: 36rem;
+    margin: 1.2rem 0 0;
+    color: color-mix(in srgb, var(--moon) 78%, transparent);
+    font-size: clamp(1rem, 1.35vw, 1.15rem);
+    line-height: 1.6;
+    text-shadow: var(--hard);
+    text-wrap: balance;
+  }
+
+  /* The menu: big labels, one highlighted with a marker and its hint. */
+  .menu {
+    margin-top: clamp(2rem, 6vh, 3.5rem);
+  }
+  .menu ul {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .item {
+    display: grid;
+    grid-template-columns: 1.6rem auto 1fr;
+    align-items: baseline;
+    gap: 0 0.9rem;
+    width: fit-content;
+    min-height: 48px;
+    padding: 0.35rem 0;
+    border: 0;
+    background: none;
+    color: color-mix(in srgb, var(--moon) 55%, transparent);
+    font: inherit;
+    text-align: left;
+    text-shadow: var(--hard);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .item:focus-visible {
+    outline: none;
+  }
+  .marker {
+    color: var(--acc);
+    font-size: 0.85rem;
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 0.15s, transform 0.2s;
+  }
+  .label {
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+  }
+  .hint {
+    font-size: 0.9rem;
+    color: var(--dusk);
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 0.15s, transform 0.2s;
+  }
+  /* Selected: lit by the lighthouse, so it takes the lamp's colour. */
+  .item.is-active {
+    color: var(--acc);
+    transform: translateX(6px);
+    text-shadow: var(--lit);
+  }
+  .item.is-active .marker {
+    opacity: 1;
+    transform: none;
+    animation: nudge 1s ease-in-out infinite;
+  }
+  .item.is-active .hint {
+    opacity: 1;
+    transform: none;
+  }
+  .item:focus-visible .label {
+    text-decoration: underline dashed;
+    text-decoration-color: var(--acc);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 6px;
+  }
+  @keyframes nudge {
+    50% {
+      transform: translateX(3px);
+    }
+  }
+  /* Quit sits a little apart, like it does in every game. */
+  .menu li:last-child {
+    margin-top: 0.6rem;
+  }
+  .item--quit .label {
+    font-size: clamp(1.15rem, 2.2vw, 1.6rem);
+  }
+
+  /* Menu entrance after the boot screen or the fake shutdown: the scene
+     fade up first, then the name, tagline and menu rise in one by one,
+     timed to start as the boot screen clears (--enter-delay). */
+  .title-screen {
+    --enter-delay: 0.5s;
+  }
+  .title-screen:global(.is-arriving) {
+    --enter-delay: 0.1s;
+  }
+  .title-screen:global(.is-entering) .bg {
+    animation: bg-in 1.4s ease-out both;
+    animation-delay: calc(var(--enter-delay) - 0.3s);
+  }
+  .title-screen:global(.is-entering) :is(.logo, .tagline, .menu li, .bar) {
+    animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--enter-delay);
+  }
+  .title-screen:global(.is-entering) .tagline {
+    animation-delay: calc(var(--enter-delay) + 0.1s);
+  }
+  .title-screen:global(.is-entering) .menu li {
+    animation-delay: calc(var(--enter-delay) + 0.22s + var(--n) * 0.07s);
+  }
+  .title-screen:global(.is-entering) .bar {
+    animation-name: fade;
+    animation-delay: calc(var(--enter-delay) + 0.6s);
+  }
+  @keyframes bg-in {
+    from {
+      opacity: 0;
+      transform: scale(1.04);
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+      filter: blur(6px);
+    }
+  }
+
+  /* Chosen: the item blinks, then everything fades to the night's black
+     before the next page opens. */
+  .item:global(.is-chosen) .label {
+    animation: chosen 0.14s steps(1) 4;
+  }
+  @keyframes chosen {
+    50% {
+      opacity: 0.15;
+    }
+  }
+  .title-screen:global(.is-going)::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: #04050c;
+    animation: fade 0.45s ease-in 0.3s both;
+    pointer-events: auto;
+  }
+
+  /* Bottom bar: rotating tip and the build number. */
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    /* Full width: tip in the bottom-left corner, sound and build bottom-right. */
+    margin: 0;
+    padding: 2rem 0 clamp(1.25rem, 4vh, 2rem);
+    font-size: 0.85rem;
+  }
+  .tip {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    margin: 0;
+    color: color-mix(in srgb, var(--moon) 75%, transparent);
+    text-shadow: var(--hard);
+  }
+  .tip-label {
+    flex: none;
+    padding: 0.1rem 0.5rem;
+    border-radius: 2px;
+    background: var(--acc);
+    color: var(--night);
+    text-shadow: none;
+    box-shadow: 2px 2px 0 rgb(5 6 20 / 0.9);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  /* Changing tips: the whole tip (label, text, and its panel by day)
+     fades out and back in, so there's never an empty box. */
+  .tip {
+    transition: opacity 0.5s ease;
+  }
+  .tip:global(.is-out) {
+    opacity: 0;
+  }
+  /* ── Ambient mode ─────────────────────────────────────────────── */
+  /* The top-right corner of the menu: small HUD windows in a row. */
+  .hud-tr {
+    position: absolute;
+    top: clamp(1rem, 3vh, 1.6rem);
+    right: var(--pad);
+    display: flex;
+    gap: 0.6rem;
+    transition: opacity 0.7s ease;
+  }
+  .ambient-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.85rem 0 0.65rem;
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.85);
+    box-shadow: 3px 3px 0 rgb(3 4 14 / 0.6);
+    color: #efecdc;
+    font: inherit;
+    font-size: 0.85rem;
+    text-shadow: none;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      color 0.15s,
+      opacity 0.6s;
+  }
+  .ambient-btn:hover,
+  .ambient-btn:focus-visible {
+    outline: none;
+    border-color: #ffd27a;
+    color: #ffd27a;
+  }
+  .amb-icon {
+    font-size: 1rem;
+    line-height: 1;
+  }
+  /* In ambient mode everything but the scene fades away. */
+  .content,
+  .bar {
+    transition: opacity 0.7s ease;
+  }
+  .title-screen:global(.is-ambient) :is(.content, .bar, .hud-tr) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .title-screen:global(.is-ambient) {
+    cursor: none;
+  }
+  /* The shading that keeps the menu readable isn't needed with no menu. */
+  .shade {
+    transition: opacity 0.7s ease;
+  }
+  .title-screen:global(.is-ambient) .shade {
+    opacity: 0.2;
+  }
+  /* The exit ✕: only on touch screens (no Esc key there). */
+  .ambient-exit {
+    position: fixed;
+    top: 0.75rem;
+    right: 0.75rem;
+    z-index: 30;
+    display: none;
+    width: 44px;
+    height: 44px;
+    border: 2px solid rgb(154 160 214 / 0.3);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.4);
+    color: rgb(239 236 220 / 0.6);
+    font: inherit;
+    cursor: pointer;
+  }
+  @media (hover: none) {
+    .title-screen:global(.is-ambient) .ambient-exit {
+      display: grid;
+      place-items: center;
+    }
+  }
+  /* "Press Esc to exit": shows for a moment, then fades. */
+  .ambient-hint {
+    position: fixed;
+    bottom: clamp(1.25rem, 4vh, 2rem);
+    left: 50%;
+    z-index: 30;
+    margin: 0;
+    padding: 0.4rem 0.85rem;
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.85);
+    color: #efecdc;
+    font-size: 0.8rem;
+    text-shadow: none;
+    opacity: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .ambient-hint:global(.is-shown) {
+    animation: hint 3.2s ease both;
+  }
+  @keyframes hint {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    15%,
+    75% {
+      opacity: 1;
+    }
+  }
+
+  /* Right end of the bottom bar: sound toggle and build number. */
+  .bar-end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  /* Sound toggle: three little bars that bounce while the theme plays. */
+  .sound {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.2rem;
+    border: 0;
+    background: none;
+    color: var(--dusk);
+    font: inherit;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .sound:hover,
+  .sound:focus-visible,
+  .sound:global(.is-on) {
+    outline: none;
+    color: var(--moon);
+  }
+  .sound-icon {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 12px;
+  }
+  .sound-icon span {
+    width: 3px;
+    height: 4px;
+    border-radius: 1px;
+    background: currentColor;
+  }
+  .sound:global(.is-on) .sound-icon span {
+    background: var(--acc);
+    animation: eq 0.9s ease-in-out infinite alternate;
+  }
+  .sound:global(.is-on) .sound-icon span:nth-child(2) {
+    animation-delay: -0.3s;
+  }
+  .sound:global(.is-on) .sound-icon span:nth-child(3) {
+    animation-delay: -0.6s;
+  }
+  @keyframes eq {
+    from {
+      height: 3px;
+    }
+    to {
+      height: 12px;
+    }
+  }
+  .build {
+    flex: none;
+    margin: 0;
+    color: var(--dusk);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── Quit dialog ─────────────────────────────────────────────── */
+  .quit {
+    width: min(26rem, calc(100vw - 2.5rem));
+    margin: auto;
+    padding: 1.6rem 1.6rem 1.4rem;
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: #0c0e2a;
+    color: var(--moon);
+    font-family: var(--font-pixel), monospace;
+    box-shadow:
+      6px 6px 0 rgb(3 4 14 / 0.9),
+      0 30px 80px -20px rgb(0 0 0 / 0.8);
+  }
+  .quit::backdrop {
+    background: rgb(0 0 0 / 0.6);
+    backdrop-filter: blur(3px);
+  }
+  .quit[open] {
+    animation: pop 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .quit:global(.is-shake) {
+    animation: shake 0.35s;
+  }
+  .quit-kicker {
+    margin: 0;
+    color: var(--acc);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .quit-title {
+    margin: 0.35rem 0 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  .quit-line {
+    min-height: 3em;
+    margin: 0.6rem 0 0;
+    color: rgb(239 236 220 / 0.75);
+    line-height: 1.5;
+  }
+  .quit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.2rem;
+  }
+  .quit-btn {
+    min-width: 5.5rem;
+    min-height: 44px;
+    padding: 0 1rem;
+    border: 2px solid rgb(154 160 214 / 0.4);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--moon);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .quit-btn:hover,
+  .quit-btn:focus-visible {
+    outline: none;
+    border-color: var(--moon);
+  }
+  /* The selected button (keyboard focus, however the box was opened)
+     gets the menu's ▶ cursor. */
+  .quit-btn:focus {
+    position: relative;
+    outline: none;
+    border-color: var(--moon);
+  }
+  .quit-btn:focus::before {
+    content: "▶";
+    position: absolute;
+    left: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--acc);
+    font-size: 0.6rem;
+  }
+  .quit-btn--main {
+    border-color: var(--acc);
+    background: var(--acc);
+    color: var(--night);
+  }
+  .quit-btn--main:hover,
+  .quit-btn--main:focus-visible {
+    border-color: #fff;
+  }
+  .quit-btn[hidden] {
+    display: none;
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+  @keyframes shake {
+    20%,
+    60% {
+      transform: translateX(-6px);
+    }
+    40%,
+    80% {
+      transform: translateX(6px);
+    }
+  }
+
+  /* ── Fake shutdown: the screen collapses to a line, then a dot ── */
+  .off {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .off-text {
+    margin: 0;
+    padding: 0 1.5rem;
+    color: rgb(255 255 255 / 0.55);
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  .title-screen:global(.is-off) > :not(.off) {
+    animation: power-off 0.55s cubic-bezier(0.6, 0, 0.9, 0.4) forwards;
+  }
+  .title-screen:global(.is-off) .off {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0s 0.5s;
+  }
+  @keyframes power-off {
+    0% {
+      filter: brightness(1);
+    }
+    40% {
+      transform: scale(1, 0.006);
+      filter: brightness(4);
+    }
+    100% {
+      transform: scale(0, 0.006);
+      filter: brightness(6);
+    }
+  }
+
+  /* ── Boot sequence (first visit) ───────────────────────────────── */
+  .boot {
+    display: none;
+  }
+  :global(html[data-boot]) .boot {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #050506;
+    color: #fff;
+    font-family: var(--font-console), system-ui, sans-serif;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Scanlines and a curved-glass vignette over everything. */
+  .scan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.28) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse 85% 80% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.75) 100%);
+  }
+  /* Standby: before the first button press, only a glowing standby
+     light. Nothing else of the boot screen exists yet, so its animations
+     start from the top when it powers on. */
+  .standby {
+    display: none;
+  }
+  :global(html[data-boot="standby"]) .standby {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.1rem;
+    animation: fade 1.2s ease-out both;
+  }
+  :global(html[data-boot="standby"]) :is(.crt, .boot-inner) {
+    display: none;
+  }
+  .led {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #f4b740;
+    box-shadow:
+      0 0 8px 2px rgb(244 183 64 / 0.7),
+      0 0 30px 6px rgb(244 183 64 / 0.25);
+    animation: breathe 2.6s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    50% {
+      opacity: 0.35;
+      box-shadow:
+        0 0 4px 1px rgb(244 183 64 / 0.4),
+        0 0 14px 3px rgb(244 183 64 / 0.1);
+    }
+  }
+  .standby-text {
+    margin: 0.4rem 0 0;
+    color: rgb(255 255 255 / 0.75);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  .standby-sub {
+    margin: 0;
+    color: rgb(255 255 255 / 0.35);
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.7rem;
+  }
+
+  /* Power on: a bright line that opens into the picture. */
+  .crt {
+    position: absolute;
+    inset: 0;
+    background: #e9fff5;
+    opacity: 0;
+    transform: scale(0, 0.004);
+    animation: power-on 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes power-on {
+    0% {
+      opacity: 1;
+      transform: scale(0, 0.004);
+    }
+    35% {
+      opacity: 1;
+      transform: scale(1, 0.004);
+    }
+    70% {
+      opacity: 0.85;
+      transform: scale(1, 1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1, 1);
+    }
+  }
+  .boot-inner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 1.5rem;
+    text-align: center;
+    animation: flicker 4s steps(1) 0.7s infinite;
+  }
+  @keyframes flicker {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    37% {
+      opacity: 0.93;
+    }
+    38% {
+      opacity: 1;
+    }
+  }
+
+  /* The pixel G: blocks drop in one by one. */
+  /* The G uses the top bar's cycling rainbow: one gradient spread across
+     the whole mark (each block shows its own slice of it), sliding on loop. */
+  .mark {
+    --mw: clamp(64px, 12vw, 92px);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    width: var(--mw);
+    filter: drop-shadow(0 0 10px rgb(255 255 255 / 0.22));
+  }
+  .mark span {
+    aspect-ratio: 1;
+  }
+  .px {
+    --x: calc(var(--c) * (var(--mw) + 4px) / -5);
+    background-image: linear-gradient(90deg, #ff5f6d, #ffc371, #6bcf63, #38b6ff, #a35cff, #ff5f6d);
+    background-size: calc(var(--mw) * 2) 100%;
+    background-position: var(--x) 0;
+    border-radius: 2px;
+    animation:
+      drop 0.4s cubic-bezier(0.3, 1.4, 0.5, 1) both,
+      rainbow 8s linear infinite;
+    animation-delay: calc(0.8s + var(--i) * 0.045s), 0s;
+  }
+  @keyframes rainbow {
+    to {
+      background-position: calc(var(--x) - var(--mw) * 2) 0;
+    }
+  }
+  @keyframes drop {
+    from {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+  }
+  .word {
+    position: relative;
+    /* Extra bottom padding so the "g" descender stays inside the painted
+       (background-clip: text) box; the negative margin keeps spacing. */
+    margin: 1.4rem 0 -0.2em;
+    padding-bottom: 0.2em;
+    font-size: clamp(2.2rem, 7vw, 3.6rem);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-shadow: 0 0 22px rgb(255 255 255 / 0.35);
+    background: linear-gradient(100deg, #fff 40%, #f4b740 50%, #fff 60%) 0 0 / 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation:
+      fade-up 0.7s ease-out 1.65s both,
+      shine 0.9s ease-in-out 2.3s both;
+  }
+  @keyframes shine {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: 150% 0;
+    }
+  }
+  .sub {
+    margin: 0.7rem 0 0;
+    color: rgb(255 255 255 / 0.55);
+    font-size: 0.8rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    animation: fade-up 0.6s ease-out 2s both;
+  }
+  .legal {
+    margin-top: clamp(2.2rem, 7vh, 3.5rem);
+    color: rgb(255 255 255 / 0.38);
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    animation: fade-up 0.5s ease-out 2.6s both;
+  }
+  .legal p {
+    margin: 0;
+  }
+  .memory {
+    display: grid;
+    margin: 1.4rem 0 0;
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.78rem;
+  }
+  .memory > span {
+    grid-area: 1 / 1;
+  }
+  .check {
+    color: rgb(255 255 255 / 0.55);
+    opacity: 0;
+    animation: check 1.1s steps(1) 3s both;
+  }
+  @keyframes check {
+    0% {
+      opacity: 1;
+    }
+    25% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+    75% {
+      opacity: 0.4;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  .found {
+    color: #f4b740;
+    animation: fade-up 0.3s ease-out 4.1s both;
+  }
+  .press {
+    margin: clamp(2rem, 6vh, 3rem) 0 0;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    opacity: 0;
+  }
+  .press-touch {
+    display: none;
+  }
+  @media (hover: none) {
+    .press-key {
+      display: none;
+    }
+    .press-touch {
+      display: inline;
+    }
+  }
+  .boot:global(.is-ready) .press {
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink {
+    0%,
+    60% {
+      opacity: 1;
+    }
+    61%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  /* Skipped (or finished): every piece jumps to its final state. */
+  .boot:global(.is-ready) :is(.crt, .word, .sub, .legal, .check, .found) {
+    animation: none;
+  }
+  .boot:global(.is-ready) .px {
+    animation: rainbow 8s linear infinite;
+  }
+  .boot:global(.is-ready) .crt {
+    opacity: 0;
+  }
+  /* Start pressed: "Press start" flashes, the logo and text drift back
+     and blur out, then the black screen dissolves into the menu. */
+  .boot:global(.is-leaving) {
+    animation: leave 0.9s ease-in-out 0.35s forwards;
+    pointer-events: none;
+  }
+  .boot:global(.is-leaving) .boot-inner {
+    animation: boot-out 0.6s cubic-bezier(0.5, 0, 0.75, 0) 0.2s forwards;
+  }
+  .boot:global(.is-leaving) .scan {
+    animation: fade 0.9s ease-in 0.35s reverse forwards;
+  }
+  .boot:global(.is-leaving) .press {
+    opacity: 1;
+    color: #f4b740;
+    animation: press-flash 0.24s steps(1) 2;
+  }
+  @keyframes press-flash {
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes leave {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes boot-out {
+    to {
+      opacity: 0;
+      transform: scale(0.96);
+      filter: blur(8px);
+    }
+  }
+
+  /* Phones: every hint shows (no hover to reveal them), centred bars. */
+  @media (hover: none), (max-width: 767px) {
+    .hint {
+      opacity: 1;
+      transform: none;
+    }
+    .item {
+      grid-template-columns: auto 1fr;
+    }
+    .marker {
+      display: none;
+    }
+    .item.is-active {
+      transform: none;
+    }
+    .item {
+      color: var(--moon);
+    }
+  }
+  @media (max-width: 767px) {
+    .item {
+      grid-template-columns: 1fr;
+    }
+    .label {
+      font-size: 1.6rem;
+    }
+    .item--quit .label {
+      font-size: 1.25rem;
+    }
+    .hint {
+      font-size: 0.85rem;
+    }
+    .build {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sound:global(.is-on) .sound-icon span {
+      animation: none;
+      height: 9px;
+    }
+    .item.is-active .marker,
+    .boot-inner,
+    .title-screen:global(.is-entering) :is(.bg, .logo, .tagline, .menu li, .bar) {
+      animation: none;
+    }
+    .boot :is(.crt, .px, .word, .sub, .legal, .check, .found),
+    .boot:global(.is-ready) .px {
+      animation: none;
+    }
+    .crt,
+    .check {
+      opacity: 0;
+    }
+    .title-screen:global(.is-off) > :not(.off) {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>

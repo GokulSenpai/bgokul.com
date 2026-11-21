@@ -1,0 +1,19 @@
+---
+/**
+ * Page footer. The social links moved to the Contact page, so this is now
+ * just the bottom spacer that pushes short pages' footers down.
+ */
+import type { HTMLAttributes } from "astro/types";
+
+type Props = {
+  noMarginTop?: boolean;
+} & HTMLAttributes<"footer">;
+
+const { noMarginTop = false, class: className, ...attrs } = Astro.props;
+---
+
+<footer
+  class:list={["pb-10", { "mt-auto": !noMarginTop }, className]}
+  {...attrs}
+>
+</footer>

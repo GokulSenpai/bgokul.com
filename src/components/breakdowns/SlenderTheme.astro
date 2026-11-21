@@ -1,0 +1,395 @@
+---
+/**
+ * The Slender breakdown's own look, on the shared case-file layout.
+ *
+ * The write-up has eight sections, the game has eight pages, so:
+ * - Black forest night, paper-white accents, a scrawled hand.
+ * - Each section opens on a torn page with "Page 3/8" scrawled on it.
+ * - The contents counts the pages you've collected (scrolled to), each
+ *   one turning into a white page as you reach it.
+ * - Static builds up as you collect pages, the way the game escalates.
+ *   Faint enough to read through; off with reduced motion.
+ * - The hero: Slender Man stands in the dark, and a flashlight (your
+ *   mouse) finds him. On touch screens he's just dimly there.
+ */
+---
+
+<div class="sl-static" aria-hidden="true"></div>
+
+<script>
+  let ctrl: AbortController | null = null;
+  function init() {
+    const root = document.querySelector<HTMLElement>('[data-case][data-theme="slender"]');
+    if (!root || root.dataset.slReady) return;
+    root.dataset.slReady = "1";
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+    document.documentElement.classList.add("theme-slender");
+    signal.addEventListener("abort", () => document.documentElement.classList.remove("theme-slender"));
+
+    // The flashlight: follows the mouse over the hero.
+    const hero = root.querySelector<HTMLElement>("[data-hero]");
+    const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
+    if (hero && fine) {
+      let raf = 0;
+      let tx = 0;
+      let ty = 0;
+      let sx = 0;
+      let sy = 0;
+      const img = hero.querySelector<HTMLElement>(".hero-art img");
+      hero.addEventListener(
+        "pointermove",
+        e => {
+          const r = hero.getBoundingClientRect();
+          const ir = img?.getBoundingClientRect();
+          tx = e.clientX - r.left;
+          ty = e.clientY - r.top;
+          sx = ir ? e.clientX - ir.left : 0;
+          sy = ir ? e.clientY - ir.top : 0;
+          if (raf) return;
+          raf = requestAnimationFrame(() => {
+            raf = 0;
+            // The pool of light on the hero, and the same spot on the
+            // figure (its mask is relative to the image itself).
+            hero.style.setProperty("--mx", `${tx}px`);
+            hero.style.setProperty("--my", `${ty}px`);
+            hero.style.setProperty("--sx", `${sx}px`);
+            hero.style.setProperty("--sy", `${sy}px`);
+            hero.classList.add("lit");
+          });
+        },
+        { signal }
+      );
+      hero.addEventListener("pointerleave", () => hero.classList.remove("lit"), { signal });
+    }
+
+    // Static builds as pages are collected (the layout reports progress).
+    const html = document.documentElement;
+    root.addEventListener(
+      "case:collect",
+      e => {
+        const { reached, total } = (e as CustomEvent<{ reached: number; total: number }>).detail;
+        html.style.setProperty("--sl-progress", String(reached / total));
+      },
+      { signal }
+    );
+    signal.addEventListener("abort", () => html.style.removeProperty("--sl-progress"));
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style is:global>
+  /* ── palette: night forest, paper, static ─────────────────── */
+  /* Keyed off the page itself (not a class set by script), so the right
+     colours are there from the first paint. */
+  html:has(main.case[data-theme="slender"]),
+  html:has(main.case[data-theme="slender"]) body {
+    background: #050505;
+  }
+  /* The scrollbar: a dull paper thumb on black (not the site's blue). */
+  html:has(main.case[data-theme="slender"]) {
+    scrollbar-color: #6f6c66 #050505;
+  }
+
+  /* ── the system windows as torn pages ─────────────────────────
+     The HUD (◀ Esc Breakdowns, Case file) and the Top button wear the
+     same scrap of paper as the "Page 3/8" tags. */
+  html:has(main.case[data-theme="slender"]) :is(.sys-back, .sys-name, .btt) {
+    border: 0;
+    border-radius: 0;
+    background: var(--sl-paper, #e9e5da);
+    box-shadow: none;
+    backdrop-filter: none;
+    color: #161514;
+    font-family: var(--font-scrawl), cursive;
+    clip-path: polygon(0 8%, 12% 0, 30% 6%, 50% 1%, 68% 7%, 86% 0, 100% 5%, 98% 50%, 100% 94%, 82% 100%, 61% 94%, 40% 100%, 20% 95%, 2% 100%, 3% 52%);
+  }
+  html:has(main.case[data-theme="slender"]) .sys-back {
+    font-size: 1.35rem;
+    transform: rotate(-1.5deg);
+    transition: transform 0.2s ease;
+  }
+  html:has(main.case[data-theme="slender"]) .sys-name {
+    padding: 0.4rem 0.9rem 0.3rem;
+    font-size: 1.35rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    transform: rotate(1.5deg);
+  }
+  html:has(main.case[data-theme="slender"]) :is(.sys-back, .btt):is(:hover, :focus-visible) {
+    color: #000;
+    background: #f7f4ec;
+  }
+  html:has(main.case[data-theme="slender"]) .sys-back:hover {
+    transform: rotate(0deg);
+  }
+  html:has(main.case[data-theme="slender"]) .sys-key {
+    border-color: rgb(22 21 20 / 0.55);
+    color: #161514;
+    font-family: var(--font-scrawl), cursive;
+    font-size: 1rem;
+  }
+  html:has(main.case[data-theme="slender"]) .btt {
+    font-size: 1.3rem;
+    rotate: -2deg;
+  }
+  html:has(main.case[data-theme="slender"]) .btt-bar {
+    border-color: rgb(22 21 20 / 0.45);
+  }
+  html:has(main.case[data-theme="slender"]) .btt-bar span {
+    background: rgb(22 21 20 / 0.12);
+  }
+  html:has(main.case[data-theme="slender"]) .btt-bar span.on {
+    background: #161514;
+  }
+  main.case[data-theme="slender"] {
+    --bd-bg: #050505;
+    --bd-text: rgb(226 222 212 / 0.86);
+    --bd-strong: #f2efe6;
+    --bd-accent: #e9e5da;
+    --bd-label: #8c8a84;
+    --bd-dim: rgb(170 166 158 / 0.6);
+    --bd-line: rgb(233 229 218 / 0.12);
+    --bd-card: rgb(233 229 218 / 0.03);
+    --paper: #e9e5da;
+    --ink: #161514;
+  }
+
+  /* ── static: builds with the pages collected ─────────────── */
+  .sl-static {
+    position: fixed;
+    inset: -50%;
+    z-index: 50;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -0.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: calc(0.02 + var(--sl-progress, 0) * 0.06);
+    mix-blend-mode: screen;
+    animation: sl-static 0.5s steps(4) infinite;
+    transition: opacity 1.2s ease;
+  }
+  @keyframes sl-static {
+    0% {
+      transform: translate(0, 0);
+    }
+    25% {
+      transform: translate(-7%, 4%);
+    }
+    50% {
+      transform: translate(5%, -6%);
+    }
+    75% {
+      transform: translate(-3%, -2%);
+    }
+  }
+
+  /* ── hero: the figure in the dark, found by the flashlight ── */
+  main.case[data-theme="slender"] .hero {
+    min-height: min(78svh, 760px);
+    overflow: hidden;
+  }
+  main.case[data-theme="slender"] .hero-art {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  main.case[data-theme="slender"] .hero-art img {
+    position: absolute;
+    right: 2%;
+    bottom: 0;
+    width: min(48vw, 640px);
+    height: auto;
+    filter: grayscale(1) contrast(1.1) brightness(0.9);
+  }
+  /* Two copies of the figure. The dim one is always there, barely. */
+  main.case[data-theme="slender"] .hero-art .art-dim {
+    opacity: 0.12;
+    -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 98%);
+    mask-image: linear-gradient(180deg, #000 55%, transparent 98%);
+  }
+  /* The lit one only shows inside the flashlight's circle. Its mask never
+     changes, only its opacity fades, so leaving the light can't flash the
+     whole figure (it used to swap masks mid-fade and blink white). */
+  main.case[data-theme="slender"] .hero-art .art-lit {
+    opacity: 0;
+    -webkit-mask-image: radial-gradient(circle 230px at var(--sx, -999px) var(--sy, -999px), #000 35%, transparent 75%);
+    mask-image: radial-gradient(circle 230px at var(--sx, -999px) var(--sy, -999px), #000 35%, transparent 75%);
+    transition: opacity 0.35s ease;
+  }
+  /* The flashlight: a soft white pool that follows the mouse, and inside
+     it the figure shows clearly. */
+  main.case[data-theme="slender"] .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      circle 220px at var(--mx, 70%) var(--my, 40%),
+      rgb(255 250 235 / 0.1),
+      rgb(255 250 235 / 0.03) 55%,
+      transparent 75%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  main.case[data-theme="slender"] .hero.lit::after {
+    opacity: 1;
+  }
+  main.case[data-theme="slender"] .hero.lit .hero-art .art-lit {
+    opacity: 0.85;
+  }
+  @media (max-width: 899px) {
+    main.case[data-theme="slender"] .hero {
+      min-height: 0;
+      padding-top: 46vw;
+    }
+    main.case[data-theme="slender"] .hero-art img {
+      left: 50%;
+      right: auto;
+      width: 70vw;
+      transform: translateX(-50%);
+      top: 0;
+      bottom: auto;
+    }
+    main.case[data-theme="slender"] .hero-art .art-dim {
+      opacity: 0.22;
+    }
+  }
+  main.case[data-theme="slender"] .kicker {
+    color: var(--bd-label);
+  }
+  main.case[data-theme="slender"] .case-title {
+    color: var(--bd-strong);
+    text-shadow: 0 0 24px rgb(0 0 0 / 0.9);
+  }
+  main.case[data-theme="slender"] .hero-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 1.5rem;
+    z-index: 1;
+    margin: 0;
+    transform: translateX(-50%);
+    color: rgb(242 239 230 / 0.75);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    animation: sl-hint 4s ease-in-out 1s both;
+  }
+  @keyframes sl-hint {
+    0% {
+      opacity: 0;
+    }
+    15%,
+    70% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* ── sections: each opens on a torn page ─────────────────── */
+  main.case[data-theme="slender"] .case-body h2::before {
+    content: "Page " counter(sec) "/" var(--total);
+    /* Its own line above the heading, only as wide as the scrawl. */
+    display: block;
+    width: fit-content;
+    margin-bottom: 0.9rem;
+    padding: 0.15em 0.7em 0.05em;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-scrawl), cursive;
+    font-size: 1.55rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+    transform: rotate(-2.5deg);
+    clip-path: polygon(0 6%, 9% 0, 22% 5%, 38% 1%, 55% 6%, 71% 0, 86% 4%, 100% 1%, 98% 52%, 100% 96%, 84% 100%, 66% 95%, 47% 100%, 30% 94%, 14% 100%, 1% 95%, 3% 50%);
+    box-shadow: none;
+  }
+  main.case[data-theme="slender"] .case-body h2:nth-of-type(even)::before {
+    transform: rotate(2deg);
+  }
+  main.case[data-theme="slender"] .case-body img {
+    border: 0;
+    border-radius: 0;
+    box-shadow: 0 18px 50px -20px rgb(0 0 0 / 0.9);
+  }
+  main.case[data-theme="slender"] .case-body blockquote {
+    border-left-color: var(--paper);
+    font-family: var(--font-scrawl), cursive;
+    font-size: 1.7em;
+    font-style: normal;
+    /* The hand's own spaces are tiny; words ran together. */
+    word-spacing: 0.12em;
+    line-height: 1.25;
+  }
+
+  /* ── contents: the pages you've collected ─────────────────── */
+  main.case[data-theme="slender"] .toc-label .count {
+    color: var(--bd-strong);
+    font-family: var(--font-scrawl), cursive;
+    font-size: 2.2rem;
+    letter-spacing: 0;
+    line-height: 1;
+    text-transform: none;
+  }
+  main.case[data-theme="slender"] .toc a {
+    position: relative;
+    border-left-color: transparent;
+    padding-left: 1.9rem;
+  }
+  /* A small page per entry: an outline until collected, then white. */
+  main.case[data-theme="slender"] .toc a::before {
+    content: "";
+    position: absolute;
+    left: 0.15rem;
+    top: 0.55rem;
+    width: 0.8rem;
+    height: 1rem;
+    border: 1.5px solid rgb(233 229 218 / 0.3);
+    transform: rotate(-6deg);
+    transition:
+      background 0.4s ease,
+      border-color 0.4s ease,
+      transform 0.4s ease;
+  }
+  main.case[data-theme="slender"] .toc a.is-collected::before {
+    border-color: var(--paper);
+    background:
+      repeating-linear-gradient(180deg, transparent 0 3px, rgb(22 21 20 / 0.45) 3px 4px) 2px 3px / calc(100% - 4px) calc(100% - 5px) no-repeat,
+      var(--paper);
+    transform: rotate(4deg);
+  }
+  main.case[data-theme="slender"] .toc a.is-collected {
+    color: rgb(226 222 212 / 0.7);
+  }
+  main.case[data-theme="slender"] .toc a.is-active {
+    color: var(--bd-strong);
+  }
+  main.case[data-theme="slender"] .toc-num {
+    display: none;
+  }
+  main.case[data-theme="slender"] .toc-mobile {
+    border: 1px solid var(--bd-line);
+    border-radius: 0;
+    background: rgb(233 229 218 / 0.03);
+    box-shadow: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sl-static {
+      animation: none;
+      opacity: 0.02 !important;
+    }
+    main.case[data-theme="slender"] .hero-hint {
+      animation: none;
+      opacity: 0.75;
+    }
+  }
+</style>

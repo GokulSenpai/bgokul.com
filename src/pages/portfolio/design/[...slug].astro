@@ -1,0 +1,1292 @@
+---
+/**
+ * A game's page: what you see once its cartridge is in the console. Styled
+ * like the rest of the site (pixel font, night palette, lamp-amber actions,
+ * HUD windows): the game's art behind the title, facts and a Play button,
+ * then the playable build in a pixel frame, then the design notes as a long
+ * read with a contents list (pixel headings, a clean sans for the reading).
+ * Esc or the back window fades back to the library, which ejects the
+ * cartridge.
+ */
+import { getCollection, render } from "astro:content";
+import { Image, Font } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import Footer from "@/components/Footer.astro";
+import ProjectCarousel from "@/components/ProjectCarousel.astro";
+import PlayableEmbed from "@/components/PlayableEmbed.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
+import ImageLightbox from "@/components/ImageLightbox.astro";
+import { taglineHtml, taglinePlain } from "@/utils/formatTagline";
+import config from "@/config";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  return projects.map(project => ({
+    params: { slug: project.id },
+    props: { project },
+  }));
+}
+
+const { project } = Astro.props;
+// The library, in shelf order (as on the Design screen).
+const library = (await getCollection("projects")).sort((a, b) => a.data.order - b.data.order);
+// Every game that can actually be played (not locked "in development"):
+// for the "Pro gamer" achievement, which wants them all.
+const playable = library.filter(p => p.data.status !== "in-development").map(p => p.id);
+// The games either side of this one on the shelf (wrapping round), for the
+// "previous / next game" buttons at the end.
+const at = library.findIndex(p => p.id === project.id);
+const prevGame = library[(at - 1 + library.length) % library.length];
+const nextGame = library[(at + 1) % library.length];
+const {
+  title,
+  tagline,
+  year,
+  role,
+  roles,
+  tools,
+  cover,
+  coverFit,
+  gallery,
+  trailerUrl,
+  embedUrl,
+  embedWidth,
+  embedHeight,
+  links,
+  accentColor,
+  award,
+  featured,
+  status,
+} = project.data;
+const { Content, headings } = await render(project);
+
+const accent = accentColor ?? "#f4b740";
+const locked = status === "in-development";
+// The cover is already the hero art, so the media section only shows
+// something new: the playable build, the trailer, or screenshots. With none
+// of those, there's no media section at all.
+const media = embedUrl ? "embed" : trailerUrl ? "trailer" : gallery?.length ? "gallery" : null;
+
+// Sections for the contents list: the write-up's ## headings, minus the
+// "Table of contents" heading the markdown TOC plugin uses.
+const sections = headings.filter(h => h.depth === 2 && h.slug !== "table-of-contents");
+const hasNotes = sections.length > 0;
+
+const badges: { label: string; kind: string }[] = [];
+if (featured) badges.push({ label: "★ Featured", kind: "featured" });
+if (embedUrl) badges.push({ label: "▶ Playable", kind: "play" });
+if (award) badges.push({ label: `🏆 ${award}`, kind: "award" });
+if (locked) badges.push({ label: "◷ In development", kind: "wip" });
+
+const playLabel = media === "embed" ? "Play" : media === "trailer" ? "Watch trailer" : "Screenshots";
+const pad = (n: number) => String(n).padStart(2, "0");
+---
+
+<Layout
+  title={`${title} | ${config.site.title}`}
+  description={tagline ? taglinePlain(tagline) : undefined}
+>
+  <Fragment slot="head">
+    <Font cssVariable="--font-console" preload={[{ subset: "latin", weight: 400, style: "normal" }]} />
+    <Font cssVariable="--font-pixel" preload={[{ subset: "latin", weight: 500, style: "normal" }]} />
+  </Fragment>
+
+  <div
+    class="game-page theme-scope"
+    style={`--accent: ${accent}; --accent-foreground: #fff`}
+    data-game-page
+    data-slug={project.id}
+    data-playable={JSON.stringify(playable)}
+  >
+    <!-- ── Hero: the game's art, title and actions ─────────── -->
+    <header class="hero">
+      <div class:list={["hero-art", { contain: coverFit === "contain" }]} aria-hidden="true">
+        <Image src={cover} alt="" width={1920} height={1200} loading="eager" fetchpriority="high" />
+      </div>
+      <div class="hero-shade" aria-hidden="true"></div>
+
+      <!-- HUD windows, like every other screen. -->
+      <nav class="hero-top" aria-label="Page">
+        <span class="hud-left">
+          <a href="/portfolio/design" class="back hud" data-back>
+            <span class="hud-arrow" aria-hidden="true">◀</span>
+            <kbd class="kb-only">Esc</kbd>
+            <span>Games</span>
+          </a>
+          <a href="/" class="back hud hud-home" data-home title="Main menu (Home key)" aria-label="Main menu">⌂</a>
+        </span>
+        <p class="hud hud-name">Now playing</p>
+      </nav>
+
+      <div class="hero-body">
+        {year && <p class="eyebrow">{year}</p>}
+        <h1>{title}</h1>
+        {
+          badges.length > 0 && (
+            <ul class="badges">
+              {badges.map(b => (
+                <li class:list={["badge", `badge-${b.kind}`]}>{b.label}</li>
+              ))}
+            </ul>
+          )
+        }
+        {tagline && <p class="tagline" set:html={taglineHtml(tagline)} />}
+
+        <div class="actions">
+          {
+            locked ? (
+              <span class="btn btn-locked" aria-disabled="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="11" width="14" height="9" rx="2" />
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+                Coming soon
+              </span>
+            ) : (
+              media && (
+                <a href="#play" class="btn btn-primary" data-play>
+                  <span aria-hidden="true">{media === "gallery" ? "▦" : "▶"}</span> {playLabel}
+                </a>
+              )
+            )
+          }
+          {
+            hasNotes && (
+              <a
+                href="#notes"
+                class:list={["btn", media || locked ? "btn-ghost" : "btn-primary"]}
+              >
+                Design notes <span aria-hidden="true">↓</span>
+              </a>
+            )
+          }
+        </div>
+
+        {
+          (roles?.length || role || tools?.length || links?.length) && (
+            <dl class="facts">
+              {(roles?.length || role) && (
+                <div>
+                  <dt>Role</dt>
+                  <dd>{roles?.length ? roles.join(" · ") : role}</dd>
+                </div>
+              )}
+              {tools && tools.length > 0 && (
+                <div>
+                  <dt>Tools</dt>
+                  <dd>{tools.join(" · ")}</dd>
+                </div>
+              )}
+              {links && links.length > 0 && (
+                <div>
+                  <dt>Links</dt>
+                  <dd class="links">
+                    {links.map(link => (
+                      <a href={link.url} target="_blank" rel="noopener noreferrer">
+                        {link.label} ↗
+                      </a>
+                    ))}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          )
+        }
+      </div>
+    </header>
+
+    <main id="main-content">
+      <!-- ── The game itself ──────────────────────────────── -->
+      {media && (
+      <section id="play" class="media" aria-label={playLabel}>
+        {
+          media === "embed" ? (
+            <PlayableEmbed
+              src={embedUrl!}
+              title={title}
+              cover={cover}
+              nativeWidth={embedWidth}
+              nativeHeight={embedHeight}
+            />
+          ) : media === "trailer" ? (
+            <video
+              src={trailerUrl}
+              controls
+              playsinline
+              class="trailer"
+              data-trailer-video
+            />
+          ) : (
+            <ProjectCarousel images={gallery!} />
+          )
+        }
+      </section>
+      )}
+
+      <!-- ── Design notes ─────────────────────────────────── -->
+      <section id="notes" class:list={["notes", { "has-toc": hasNotes }]}>
+        {
+          hasNotes && (
+            <aside class="toc" aria-label="Contents">
+              <p class="toc-label">Contents</p>
+              <ol>
+                {sections.map((s, i) => (
+                  <li>
+                    <a href={`#${s.slug}`} data-toc-link={s.slug}>
+                      <span class="toc-num">{pad(i + 1)}</span>
+                      <span>{s.text}</span>
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </aside>
+          )
+        }
+
+        <div class="notes-col">
+          {hasNotes && <p class="notes-label">Design notes</p>}
+          {
+            hasNotes && (
+              <details class="toc-mobile">
+                <summary>Contents · {sections.length} sections</summary>
+                <ol>
+                  {sections.map((s, i) => (
+                    <li>
+                      <a href={`#${s.slug}`}>
+                        <span class="toc-num">{pad(i + 1)}</span> {s.text}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )
+          }
+          <article data-lightbox class="app-prose notes-body">
+            <Content />
+          </article>
+        </div>
+      </section>
+
+      <!-- What next: the games either side on the shelf, or say hi. -->
+      <nav class="more" aria-label="More games">
+        {
+          library.length > 1 && (
+            <>
+              <a class="hud more-btn" href={`/portfolio/design/${prevGame.id}`} data-fade>
+                <span class="more-label">◀ Previous game</span>
+                <span class="more-title">{prevGame.data.title}</span>
+              </a>
+              <a class="hud more-btn is-next" href={`/portfolio/design/${nextGame.id}`} data-fade>
+                <span class="more-label">Next game ▶</span>
+                <span class="more-title">{nextGame.data.title}</span>
+              </a>
+            </>
+          )
+        }
+        <a class="hud more-btn is-contact" href="/contact" data-fade>
+          <span class="more-label">Liked this one?</span>
+          <span class="more-title">Say hi ▶</span>
+        </a>
+      </nav>
+
+      <BackToTopButton />
+      <ImageLightbox />
+    </main>
+  </div>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { unlock, playedGame } from "@/scripts/achievements";
+
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    const root = document.querySelector<HTMLElement>("[data-game-page]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+    // A cartridge went in to get here: an achievement (the first time),
+    // and one more towards playing the whole library.
+    const playable: string[] = JSON.parse(root.dataset.playable || "[]");
+    if (playable.includes(root.dataset.slug!)) {
+      unlock("cartridge");
+      playedGame(root.dataset.slug!, playable);
+    }
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Back to the library: the site's fade to black, then the library
+    // (which ejects this cartridge back onto its shelf).
+    let leaving = false;
+    const leave = () => {
+      if (leaving) return;
+      leaving = true;
+      if (reduce) return void navigate("/portfolio/design");
+      document.documentElement.classList.add("sys-leaving");
+      setTimeout(() => navigate("/portfolio/design"), 380);
+    };
+    // Play: glide down to the game and start it.
+    root.querySelector<HTMLAnchorElement>("[data-play]")?.addEventListener(
+      "click",
+      e => {
+        const media = document.getElementById("play");
+        if (!media) return;
+        e.preventDefault();
+        media.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+        const startBtn = media.querySelector<HTMLButtonElement>("[data-embed-play]");
+        if (startBtn) setTimeout(() => startBtn.click(), reduce ? 0 : 450);
+      },
+      { signal }
+    );
+
+    // Esc goes back to the games list, unless an image viewer is open
+    // (it uses Esc to close). Capture phase, so this sees it first.
+    window.addEventListener(
+      "keydown",
+      e => {
+        if (e.key !== "Escape" || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target as HTMLElement | null;
+        if (t?.closest("input, textarea, select, [contenteditable]")) return;
+        const viewer = document.querySelector<HTMLElement>('[role="dialog"]');
+        if (viewer && viewer.offsetParent !== null) return;
+        if (document.fullscreenElement) return;
+        leave();
+      },
+      { signal, capture: true }
+    );
+    root.querySelector<HTMLAnchorElement>("[data-back]")?.addEventListener(
+      "click",
+      e => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        leave();
+      },
+      { signal }
+    );
+
+    // Contents: highlight the section being read.
+    const links = [...root.querySelectorAll<HTMLAnchorElement>("[data-toc-link]")];
+    if (links.length) {
+      const heads = links
+        .map(a => document.getElementById(a.dataset.tocLink!))
+        .filter((h): h is HTMLElement => !!h);
+      const setActive = (id: string) =>
+        links.forEach(a => a.classList.toggle("is-active", a.dataset.tocLink === id));
+      const onScroll = () => {
+        // The last heading above the top third of the screen is "current".
+        const line = window.innerHeight * 0.33;
+        let current = heads[0]?.id;
+        for (const h of heads) if (h.getBoundingClientRect().top <= line) current = h.id;
+        if (current) setActive(current);
+      };
+      onScroll();
+      window.addEventListener("scroll", onScroll, { signal, passive: true });
+    }
+
+    // Close the phone contents list after picking a section.
+    root.querySelectorAll<HTMLAnchorElement>(".toc-mobile a").forEach(a =>
+      a.addEventListener(
+        "click",
+        () => a.closest("details")?.removeAttribute("open"),
+        { signal }
+      )
+    );
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), {
+      signal,
+      once: true,
+    });
+  }
+  document.addEventListener("astro:page-load", init);
+
+  // WebM files recorded via the browser's MediaRecorder API (screen
+  // recordings, etc.) commonly ship without a proper duration in the
+  // container header: Chrome reports `duration: Infinity`, shows a stuck
+  // 0:00, and can refuse to play. Seeking to a huge timestamp forces Chrome
+  // to walk the file and recover the real duration.
+  function applyVideoFixes(video: HTMLVideoElement) {
+    if (video.duration === Infinity || Number.isNaN(video.duration)) {
+      video.currentTime = 1e101;
+      video.addEventListener("timeupdate", () => (video.currentTime = 0), { once: true });
+    }
+    // Match the box to the video's real aspect ratio instead of forcing 16:9.
+    if (video.videoWidth && video.videoHeight) {
+      video.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+    }
+  }
+  function fixUnseekableVideos() {
+    document.querySelectorAll<HTMLVideoElement>("[data-trailer-video]").forEach(video => {
+      if (video.dataset.durationFixed) return;
+      video.dataset.durationFixed = "true";
+      if (video.readyState >= 1) applyVideoFixes(video);
+      else video.addEventListener("loadedmetadata", () => applyVideoFixes(video));
+    });
+  }
+  fixUnseekableVideos();
+  document.addEventListener("astro:page-load", fixUnseekableVideos);
+
+  // Going back from a game to the library (Esc, the back link or the
+  // browser's Back): leave a note so the library ejects this game's
+  // cartridge and puts it back on its shelf.
+  document.addEventListener("astro:before-swap", e => {
+    const from = e.from.pathname.replace(/\/+$/, "");
+    const to = e.to.pathname.replace(/\/+$/, "");
+    const m = from.match(/^\/portfolio\/design\/([^/]+)$/);
+    if (m && to === "/portfolio/design") {
+      try {
+        sessionStorage.setItem("eject", m[1]);
+      } catch {}
+      // Hide this game's cartridge (and its name) on the incoming shelf
+      // before it's ever shown, so it doesn't flash in its spot before the
+      // eject takes it out of the console.
+      e.newDocument
+        .querySelectorAll<HTMLAnchorElement>(`a[href$="/portfolio/design/${m[1]}"]`)
+        .forEach(a => {
+          a.querySelectorAll<HTMLElement>(".cart").forEach(c => (c.style.visibility = "hidden"));
+          a.querySelector<HTMLElement>(".slot-name")?.style.setProperty("opacity", "0");
+        });
+    }
+  });
+</script>
+
+<style>
+  /* Same dark room as the console screen. */
+  /* The page is the same navy as the hero's shading, so the shading has
+     no visible edge where it ends. */
+  :global(html:has(.game-page)) {
+    background: #07081a;
+  }
+  :global(body:has(.game-page)) {
+    background: transparent;
+  }
+  :global(body:has(.game-page) footer.border-t) {
+    border-color: transparent;
+  }
+
+  .game-page {
+    --accent-light: color-mix(in srgb, var(--accent) 70%, white);
+    /* The main menu's palette; the game's own colour stays for accents. */
+    --amber: #ffd27a;
+    --moon: #efecdc;
+    --dusk: #9aa0d6;
+    --night: #07081a;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+    --pixel: var(--font-pixel), ui-monospace, monospace;
+    --pad: clamp(1rem, 4vw, 4.5rem);
+    --page: 1280px;
+    color: var(--moon);
+    font-family: var(--font-console), system-ui, sans-serif;
+  }
+
+  /* ── hero ───────────────────────────────────────────────── */
+  .hero {
+    /* Top bar and title sit on the same column as the game and the notes
+       below, so "‹ Games", the title and the profile icon line up with the
+       edges of the content. */
+    --hero-w: var(--page);
+    /* Left edge of the text column, on any screen width. The art and the
+       darkening behind the text are placed from this, not from the window
+       edge, so on ultrawide screens the art still starts right behind the
+       title instead of being pushed off to the far right. */
+    --col: max(var(--pad), calc((100% - var(--page)) / 2 + var(--pad)));
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    /* Sized by its content (with a floor), not forced to most of the
+       window's height, so there's no big empty gap above the title. */
+    min-height: clamp(420px, 56svh, 640px);
+    padding: clamp(1rem, 3.5vh, 2.75rem) var(--pad) clamp(2rem, 5vh, 3.5rem);
+    /* The art runs on below the hero (see .hero-art) so its fade-out has
+       room; only clip sideways, where the slow zoom would overflow. */
+    overflow-x: clip;
+  }
+  /* Netflix style: the art fills the whole hero edge to edge, and shading
+     layered on top (not masks) blends it into the page: a deep fade from
+     the left behind the text, and a fade at the bottom into the page. */
+  /* The art sits on the right, like Netflix: it starts a little past the
+     title and runs to the window's right edge, its left edge dissolving
+     into the dark area under the text (an eased fade, so no visible band). */
+  .hero-art {
+    /* Left edge: eased fade into the dark under the text. */
+    --fade-left: linear-gradient(
+      90deg,
+      transparent 0%, rgb(0 0 0 / 0.04) 6%, rgb(0 0 0 / 0.14) 12%,
+      rgb(0 0 0 / 0.3) 19%, rgb(0 0 0 / 0.5) 26%, rgb(0 0 0 / 0.7) 33%,
+      rgb(0 0 0 / 0.86) 40%, rgb(0 0 0 / 0.96) 47%, #000 54%
+    );
+    /* Bottom: the art extends 16rem below the hero and fades out over a
+       long, eased stretch, so there's no hard line where the hero ends. */
+    --fade-bottom: linear-gradient(
+      0deg,
+      transparent 0%, rgb(0 0 0 / 0.03) 6%, rgb(0 0 0 / 0.1) 13%,
+      rgb(0 0 0 / 0.22) 20%, rgb(0 0 0 / 0.38) 27%, rgb(0 0 0 / 0.56) 34%,
+      rgb(0 0 0 / 0.74) 41%, rgb(0 0 0 / 0.88) 48%, rgb(0 0 0 / 0.97) 55%, #000 62%
+    );
+    position: absolute;
+    inset: 0 0 -16rem calc(var(--col) + 14rem);
+    z-index: -2;
+    -webkit-mask-image: var(--fade-left), var(--fade-bottom);
+    mask-image: var(--fade-left), var(--fade-bottom);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+  /* Fine film grain on the art itself (so it fades out with it): gives the
+     eye real texture, so stretched covers read as a photographic look
+     rather than low resolution. */
+  .hero-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.09;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+  .hero-art :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Wide screens crop the top and bottom; keep the top (titles, faces). */
+    object-position: center 15%;
+    /* Covers are often smaller than a wide screen, so the browser stretches
+       them and pixels show. A slight blur softens those steps, and the grain
+       laid over the hero (below) hides what's left. */
+    filter: brightness(0.75) blur(2px);
+    animation: drift 18s ease-out both;
+  }
+  .hero-art.contain :global(img) {
+    object-fit: contain;
+    object-position: right center;
+  }
+  @keyframes drift {
+    from {
+      transform: scale(1.06);
+    }
+    to {
+      transform: scale(1.01);
+    }
+  }
+  .hero-shade {
+    position: absolute;
+    /* Same depth as the art, which runs on below the hero, so the shading
+       doesn't stop at the hero's edge and leave a line. */
+    inset: 0 0 -16rem 0;
+    z-index: -1;
+    background:
+      /* Left: solid behind the text, easing out across the art. Measured
+         from the text column so it also works on ultrawide screens. */
+      linear-gradient(
+        90deg,
+        #07081a 0,
+        rgb(7 8 26 / 0.92) var(--col),
+        rgb(7 8 26 / 0.8) calc(var(--col) + 16rem),
+        rgb(7 8 26 / 0.55) calc(var(--col) + 32rem),
+        rgb(7 8 26 / 0.25) calc(var(--col) + 46rem),
+        rgb(7 8 26 / 0.08) calc(var(--col) + 58rem),
+        transparent calc(var(--col) + 68rem)
+      ),
+      /* (No bottom shade: the art itself fades out below the hero.) */
+      /* Top: a little shade under the back button. */
+      linear-gradient(180deg, rgb(7 8 26 / 0.5) 0%, transparent 18%),
+      /* The game's own colour washing over the art side, as in the library. */
+      radial-gradient(ellipse 70% 80% at 80% 35%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%);
+  }
+
+  .hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    max-width: calc(var(--hero-w) - 2 * var(--pad));
+    margin: 0 auto;
+  }
+  /* HUD windows (the back link, and "Now playing"). */
+  .hud {
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.88);
+    box-shadow: 3px 3px 0 rgb(3 4 14 / 0.7);
+    font-family: var(--pixel);
+    font-variant-ligatures: none;
+    backdrop-filter: blur(4px);
+  }
+  .hud-left {
+    display: flex;
+    gap: 0.5rem;
+  }
+  /* What next: previous / next game, and say hi. */
+  .more {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    max-width: var(--page);
+    margin: 0 auto 4rem;
+    padding: 0 var(--pad);
+  }
+  .more-btn {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.9rem 1.1rem;
+    text-decoration: none;
+    transition:
+      border-color 0.15s,
+      transform 0.15s;
+  }
+  .more-btn.is-next {
+    text-align: center;
+  }
+  .more-btn.is-contact {
+    text-align: right;
+  }
+  .more-btn:hover,
+  .more-btn:focus-visible {
+    outline: none;
+    border-color: var(--amber);
+    transform: translate(-2px, -2px);
+  }
+  .more-label {
+    color: var(--dusk);
+    font-family: var(--pixel);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .more-title {
+    color: var(--moon);
+    font-family: var(--pixel);
+    font-size: 1rem;
+  }
+  @media (max-width: 720px) {
+    .more {
+      grid-template-columns: 1fr;
+    }
+    .more-btn.is-next,
+    .more-btn.is-contact {
+      text-align: left;
+    }
+  }
+  .back.hud-home {
+    justify-content: center;
+    min-width: 40px;
+    padding: 0 0.6rem;
+    font-size: 1.05rem;
+  }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 40px;
+    padding: 0 0.8rem 0 0.6rem;
+    color: var(--dusk);
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+  .back:hover,
+  .back:focus-visible {
+    border-color: var(--amber);
+    color: var(--amber);
+    outline: none;
+  }
+  .hud-arrow {
+    font-size: 0.7rem;
+  }
+  .back kbd {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.8rem;
+    height: 1.45rem;
+    padding: 0 0.35rem;
+    border: 2px solid rgb(154 160 214 / 0.5);
+    border-bottom-width: 3px;
+    border-radius: 3px;
+    color: var(--moon);
+    font: inherit;
+    font-size: 0.68rem;
+  }
+  .hud-name {
+    margin: 0;
+    padding: 0.55rem 0.8rem;
+    color: var(--amber);
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .hero-body {
+    width: 100%;
+    max-width: calc(var(--hero-w) - 2 * var(--pad));
+    margin: auto auto 0;
+    padding-top: clamp(2rem, 7vh, 5rem);
+  }
+  .hero-body > * {
+    max-width: 44rem;
+  }
+  .eyebrow {
+    margin: 0 0 0.6rem;
+    color: var(--accent-light);
+    font-family: var(--pixel);
+    font-size: 0.9rem;
+    letter-spacing: 0.2em;
+    text-shadow: var(--hard);
+  }
+  .hero h1 {
+    margin: 0;
+    font-family: var(--pixel);
+    font-size: clamp(2.4rem, 6.4vw, 4.8rem);
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.02;
+    letter-spacing: 0.01em;
+    text-shadow:
+      0.06em 0.06em 0 rgb(5 6 20 / 0.95),
+      0 0 30px rgb(0 0 0 / 0.5);
+  }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  /* Pixel tags, as in the library. */
+  .badge {
+    --c: var(--accent-light);
+    padding: 0.15rem 0.5rem;
+    border: 2px solid color-mix(in srgb, var(--c) 60%, transparent);
+    border-radius: 3px;
+    background: rgb(12 14 42 / 0.75);
+    box-shadow: 2px 2px 0 rgb(3 4 14 / 0.75);
+    color: color-mix(in srgb, var(--c) 55%, white);
+    font-family: var(--pixel);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .badge-award,
+  .badge-featured {
+    --c: #ffd27a;
+  }
+  .badge-wip {
+    --c: #9aa0d6;
+  }
+  .tagline {
+    margin: 1rem 0 0;
+    color: rgb(239 236 220 / 0.82);
+    font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.75rem;
+  }
+  /* Pixel buttons with hard shadows, like the menu's dialogs. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 48px;
+    padding: 0 1.4rem;
+    border: 2px solid transparent;
+    border-radius: 3px;
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.85);
+    font-family: var(--pixel);
+    font-size: 0.92rem;
+    font-variant-ligatures: none;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+    text-transform: uppercase;
+    touch-action: manipulation;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+  .btn:hover,
+  .btn:focus-visible {
+    outline: none;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 rgb(3 4 14 / 0.85);
+  }
+  .btn-primary {
+    border-color: var(--amber);
+    background: var(--amber);
+    color: var(--night);
+  }
+  .btn-primary:focus-visible {
+    border-color: var(--moon);
+  }
+  .btn-ghost {
+    border-color: rgb(154 160 214 / 0.45);
+    background: rgb(12 14 42 / 0.85);
+    color: var(--moon);
+  }
+  .btn-ghost:hover,
+  .btn-ghost:focus-visible {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .btn-locked {
+    border: 2px dashed rgb(154 160 214 / 0.45);
+    background: rgb(12 14 42 / 0.7);
+    box-shadow: none;
+    color: var(--dusk);
+    cursor: not-allowed;
+  }
+  .btn-locked:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .btn-locked svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem 2.5rem;
+    margin: 2rem 0 0;
+  }
+  .facts dt {
+    color: var(--dusk);
+    font-family: var(--pixel);
+    font-size: 0.75rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .facts dd {
+    margin: 0.3rem 0 0;
+    font-size: 0.95rem;
+  }
+  .facts .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .facts a {
+    color: var(--amber);
+    text-decoration: none;
+  }
+  .facts a:hover {
+    text-decoration: underline;
+  }
+
+  /* The hero art fades out underneath the top of this, so keep the game
+     and notes above it. */
+  main {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── the game ───────────────────────────────────────────── */
+  .media {
+    max-width: var(--page);
+    margin: 0 auto;
+    padding: 0 var(--pad);
+    scroll-margin-top: 2rem;
+  }
+  /* The game in a pixel window frame, with a soft glow in its colour. */
+  .media :global(.embed-frame),
+  .media :global(.trailer) {
+    border: 3px solid rgb(154 160 214 / 0.45);
+    border-radius: 6px;
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.85),
+      6px 6px 0 rgb(3 4 14 / 0.85),
+      0 30px 80px -30px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  /* The cover is already the hero art, so the game's "press play" poster
+     shows it blurred and dark behind a big Play button: it reads as the
+     game waiting to start, not as the same picture twice. */
+  .media :global(.embed-play) {
+    overflow: hidden;
+    background: #000;
+  }
+  .media :global(.embed-play-cover) {
+    filter: blur(22px) brightness(0.4) saturate(1.2);
+    transform: scale(1.15);
+  }
+  /* "Click to play": an amber pixel block with a hard shadow. */
+  .media :global(.embed-play-icon) {
+    width: 84px;
+    height: 84px;
+    border-radius: 4px;
+    font-size: 1.9rem;
+    background: var(--amber);
+    color: var(--night);
+    box-shadow: 6px 6px 0 rgb(3 4 14 / 0.85);
+  }
+  .media :global(.embed-play-label) {
+    font-family: var(--pixel);
+    font-size: 1rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .media .trailer {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 75vh;
+    margin: 0 auto;
+    aspect-ratio: 16 / 9;
+    background: #000;
+  }
+
+  /* ── design notes ───────────────────────────────────────── */
+  .notes {
+    max-width: var(--page);
+    margin: 0 auto;
+    padding: clamp(3.5rem, 9vh, 6rem) var(--pad) 4rem;
+    scroll-margin-top: 1rem;
+  }
+  .notes-col {
+    max-width: 42rem;
+    margin: 0 auto;
+  }
+  @media (min-width: 1024px) {
+    .notes.has-toc {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 42rem);
+      justify-content: center;
+      gap: clamp(3rem, 6vw, 6rem);
+    }
+    .notes.has-toc .notes-col {
+      margin: 0;
+    }
+  }
+  .notes-label {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin: 0 0 2rem;
+    color: var(--amber);
+    font-family: var(--pixel);
+    font-size: 0.85rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+  .notes-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 50%, transparent), transparent);
+  }
+
+  /* Contents: sticky on the left on wide screens, highlights where you are. */
+  .toc {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .toc {
+      display: block;
+      position: sticky;
+      top: 2rem;
+      align-self: start;
+      max-height: calc(100vh - 4rem);
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+  }
+  .toc-label {
+    margin: 0 0 1rem;
+    color: var(--dusk);
+    font-family: var(--pixel);
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .toc ol,
+  .toc-mobile ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .toc a {
+    display: flex;
+    gap: 0.7rem;
+    padding: 0.45rem 0 0.45rem 0.9rem;
+    border-left: 3px solid rgb(154 160 214 / 0.15);
+    color: var(--dusk);
+    font-size: 0.88rem;
+    line-height: 1.35;
+    text-decoration: none;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .toc a:hover,
+  .toc a:focus-visible {
+    color: var(--moon);
+    outline: none;
+  }
+  .toc a.is-active {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .toc-num {
+    color: color-mix(in srgb, var(--accent-light) 80%, transparent);
+    font-family: var(--pixel);
+    font-size: 0.78rem;
+    padding-top: 0.08rem;
+  }
+  .toc-mobile {
+    margin: 0 0 2.5rem;
+    border: 3px solid rgb(154 160 214 / 0.4);
+    border-radius: 6px;
+    background: linear-gradient(180deg, rgb(32 38 104 / 0.6), rgb(14 17 56 / 0.6));
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.75);
+  }
+  .toc-mobile summary {
+    padding: 0.9rem 1.1rem;
+    font-family: var(--pixel);
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .toc-mobile ol {
+    padding: 0 1.1rem 0.9rem;
+  }
+  .toc-mobile a {
+    display: block;
+    padding: 0.5rem 0;
+    color: var(--muted-foreground);
+    font-size: 0.92rem;
+    text-decoration: none;
+  }
+  @media (min-width: 1024px) {
+    .toc-mobile {
+      display: none;
+    }
+  }
+
+  /* The write-up itself: a serif made for reading, comfortable size and
+     line length. Section breaks are space plus a numbered heading, not
+     divider lines. */
+  .notes-body {
+    max-width: none;
+    color: rgb(239 236 220 / 0.88);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: clamp(1.08rem, 1.2vw, 1.18rem);
+    line-height: 1.75;
+    counter-reset: sec;
+  }
+  .notes-body :global(> *:first-child) {
+    margin-top: 0;
+  }
+  .notes-body :global(p),
+  .notes-body :global(li),
+  .notes-body :global(td) {
+    color: inherit;
+    text-align: left;
+    text-wrap: pretty;
+  }
+  .notes-body :global(p) {
+    margin: 0 0 1.4em;
+  }
+  .notes-body :global(strong) {
+    color: #fff;
+    font-weight: 600;
+  }
+  .notes-body :global(a) {
+    color: var(--accent-light);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    text-underline-offset: 3px;
+  }
+  .notes-body :global(a:hover) {
+    color: #fff;
+  }
+  /* The markdown's own TOC and divider lines are replaced by the page's. */
+  .notes-body :global(h2#table-of-contents),
+  .notes-body :global(> details:not(.callout)),
+  .notes-body :global(> p:empty),
+  .notes-body :global(hr) {
+    display: none;
+  }
+  /* Headings people read: the clean sans, for scanning. (The pixel font
+     stays for the title, buttons, labels and the small section numbers.) */
+  .notes-body :global(h2) {
+    margin: 4.5rem 0 1.2rem;
+    color: var(--moon);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: clamp(1.6rem, 2.6vw, 2.15rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    scroll-margin-top: 2rem;
+  }
+  .notes-body :global(h2:not(#table-of-contents)) {
+    counter-increment: sec;
+  }
+  .notes-body :global(h2:not(#table-of-contents))::before {
+    content: counter(sec, decimal-leading-zero);
+    display: block;
+    font-family: var(--pixel);
+    margin-bottom: 0.55rem;
+    color: var(--accent-light);
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+  }
+  /* No big gap above the very first section. */
+  .notes-body :global(> :nth-child(1 of h2:not(#table-of-contents))) {
+    margin-top: 0;
+  }
+  .notes-body :global(h3) {
+    margin: 2.5rem 0 0.8rem;
+    color: var(--moon);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    font-style: normal;
+  }
+  .notes-body :global(ul),
+  .notes-body :global(ol) {
+    margin: 0 0 1.5em;
+    padding-left: 1.3em;
+  }
+  .notes-body :global(li) {
+    margin: 0.45em 0;
+  }
+  .notes-body :global(li::marker) {
+    color: var(--accent-light);
+  }
+  .notes-body :global(img) {
+    margin: 2.25rem auto;
+    border: 3px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    box-shadow: 5px 5px 0 rgb(3 4 14 / 0.75);
+  }
+  .notes-body :global(blockquote:not([data-callout])) {
+    margin: 2rem 0;
+    padding: 0.2rem 0 0.2rem 1.4rem;
+    border-left: 3px solid var(--accent);
+    color: #fff;
+    font-size: 1.2em;
+    font-style: italic;
+    opacity: 1;
+  }
+  .notes-body :global(blockquote p) {
+    margin: 0;
+  }
+  /* Tables (e.g. Controls): clean rows, no grid. */
+  .notes-body :global(table) {
+    width: 100%;
+    margin: 1.5rem 0 2rem;
+    border-collapse: collapse;
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.95rem;
+  }
+  .notes-body :global(th),
+  .notes-body :global(td) {
+    padding: 0.75rem 1rem 0.75rem 0;
+    border: 0;
+    border-bottom: 2px solid rgb(154 160 214 / 0.15);
+    vertical-align: top;
+  }
+  .notes-body :global(th) {
+    color: var(--dusk);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .notes-body :global(code) {
+    padding: 0.1em 0.35em;
+    border-radius: 6px;
+    background: rgb(255 255 255 / 0.08);
+    font-size: 0.85em;
+  }
+
+  /* Callouts (> [!TIP] etc.): side notes in the game's colour. */
+  .notes-body :global([data-callout]) {
+    margin: 2.25rem 0;
+    padding: 1.1rem 1.35rem;
+    border: 0;
+    border-left: 4px solid var(--accent-light);
+    border-radius: 0 4px 4px 0;
+    background: color-mix(in srgb, var(--accent) 8%, rgb(12 14 42 / 0.75));
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.6);
+    font-size: 1rem;
+  }
+  .notes-body :global(.callout-title) {
+    margin-bottom: 0.4rem;
+    color: var(--accent-light);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .notes-body :global([data-callout] p) {
+    margin: 0;
+    color: #fff;
+  }
+  /* The callout theme makes the body a scroll box with a tight line
+     height, so serif text overflowed by a pixel and showed a scrollbar.
+     Let it grow to fit instead. */
+  .notes-body :global(.callout-content) {
+    overflow: visible;
+    line-height: 1.65;
+  }
+
+  @media (pointer: coarse) {
+    .kb-only {
+      display: none;
+    }
+  }
+
+  /* ── phones ─────────────────────────────────────────────── */
+  @media (max-width: 767.98px) {
+    .hero {
+      min-height: auto;
+      padding-bottom: 2.5rem;
+    }
+    /* Art across the top, fading into the page; text underneath. */
+    .hero-art {
+      inset: 0 0 auto 0;
+      height: 62vw;
+      min-height: 260px;
+      --fade-down: #000 40%, rgb(0 0 0 / 0.8) 55%, rgb(0 0 0 / 0.5) 68%,
+        rgb(0 0 0 / 0.22) 80%, rgb(0 0 0 / 0.06) 91%, transparent 100%;
+      -webkit-mask-image: linear-gradient(180deg, var(--fade-down));
+      mask-image: linear-gradient(180deg, var(--fade-down));
+      -webkit-mask-composite: source-over;
+      mask-composite: add;
+    }
+    .hero-shade {
+      background:
+        linear-gradient(180deg, rgb(7 8 26 / 0.6) 0%, transparent 25%),
+        radial-gradient(ellipse 90% 50% at 50% 20%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%);
+    }
+    .hero-body {
+      padding-top: max(34vw, 150px);
+    }
+    .actions .btn {
+      flex: 1 1 auto;
+    }
+    .facts {
+      gap: 0.9rem 1.75rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-art :global(img) {
+      animation: none;
+    }
+  }
+</style>

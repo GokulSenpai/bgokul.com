@@ -1,0 +1,88 @@
+---
+/**
+ * A loop drawn as a column of steps with arrows between them; the last
+ * step leads back to the first (shown with a return line down the side).
+ */
+interface Props {
+  steps: string[];
+  /** Text on the way back to the top. */
+  back?: string;
+}
+const { steps, back = "Back to the start" } = Astro.props;
+---
+
+<div class="loop" role="list" aria-label="A loop: the last step leads back to the first">
+  {
+    steps.map((s, i) => (
+      <div class:list={["step", { first: i === 0, last: i === steps.length - 1 }]} role="listitem">
+        <span class="n" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+        <span class="t">{s}</span>
+      </div>
+    ))
+  }
+  <p class="back"><span aria-hidden="true">↺ </span>{back}</p>
+</div>
+
+<style>
+  .loop {
+    position: relative;
+    margin: 2rem 0 2.5rem;
+    padding-left: 2.25rem;
+  }
+  /* The return line: from the last step back up to the first. */
+  .loop::before {
+    content: "";
+    position: absolute;
+    left: 0.4rem;
+    top: 1.1rem;
+    bottom: 3.1rem;
+    width: 1.1rem;
+    border: 2px dashed var(--bd-accent, #f4b740);
+    border-right: 0;
+    border-radius: 6px 0 0 6px;
+    opacity: 0.55;
+  }
+  .step {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--bd-line, rgb(154 160 214 / 0.18));
+    background: var(--bd-card, rgb(255 255 255 / 0.02));
+  }
+  .step + .step {
+    margin-top: 1.35rem;
+  }
+  /* The arrow between two steps. */
+  .step + .step::before {
+    content: "↓";
+    position: absolute;
+    left: 50%;
+    top: -1.3rem;
+    transform: translateX(-50%);
+    color: var(--bd-dim, rgb(154 160 214 / 0.6));
+    font-size: 0.9rem;
+    line-height: 1.2rem;
+  }
+  .step.first,
+  .step.last {
+    border-color: var(--bd-accent, #f4b740);
+  }
+  .step.first .t {
+    color: var(--bd-strong, #fff);
+    font-weight: 600;
+  }
+  .n {
+    color: var(--bd-dim, rgb(154 160 214 / 0.6));
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    font-variant-ligatures: none;
+  }
+  .back {
+    margin: 1rem 0 0 !important;
+    color: var(--bd-accent, #f4b740);
+    font-size: 0.9rem;
+    font-style: italic;
+  }
+</style>

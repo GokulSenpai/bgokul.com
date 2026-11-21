@@ -1,0 +1,132 @@
+---
+import { heroTitles } from "@/data/heroTitles";
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<h1
+  id="hero-typewriter"
+  class:list={["w-fit", className]}
+  data-words={JSON.stringify(heroTitles)}
+>
+  <span data-typewriter-text>{heroTitles[0]}</span><span
+    class="typewriter-cursor"
+    aria-hidden="true">|</span
+  >
+</h1>
+
+<script>
+  function initTypewriter() {
+    const el = document.getElementById("hero-typewriter");
+    if (!el || el.dataset.twInit) return;
+    el.dataset.twInit = "true";
+
+    const words: string[] = JSON.parse(el.dataset.words || "[]");
+    const textEl = el.querySelector<HTMLElement>("[data-typewriter-text]");
+    if (!textEl || words.length === 0) return;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      textEl.textContent = words[0];
+      return;
+    }
+
+    const TYPE_SPEED = 70;
+    const DELETE_SPEED = 40;
+    const PAUSE_AFTER_TYPE = 1800;
+    const PAUSE_AFTER_DELETE = 300;
+
+    let wordIndex = 0;
+    let charIndex = words[0].length;
+    let deleting = false;
+    let timer = 0;
+    const later = (ms: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(tick, ms);
+    };
+
+    textEl.textContent = words[0];
+
+    function tick() {
+      // Navigated away from the page: stop this loop.
+      if (!el!.isConnected) return;
+      // While the home boot screen covers the page, hold on the first title.
+      if (document.documentElement.dataset.boot !== undefined) {
+        later(PAUSE_AFTER_TYPE);
+        return;
+      }
+      const current = words[wordIndex];
+
+      if (!deleting) {
+        charIndex++;
+        textEl!.textContent = current.slice(0, charIndex);
+        if (charIndex >= current.length) {
+          deleting = true;
+          later(PAUSE_AFTER_TYPE);
+          return;
+        }
+        later(TYPE_SPEED);
+      } else {
+        charIndex--;
+        textEl!.textContent = current.slice(0, Math.max(charIndex, 0));
+        if (charIndex <= 0) {
+          deleting = false;
+          wordIndex = (wordIndex + 1) % words.length;
+          charIndex = 0;
+          later(PAUSE_AFTER_DELETE);
+          return;
+        }
+        later(DELETE_SPEED);
+      }
+    }
+
+    later(PAUSE_AFTER_TYPE);
+
+    // "typewriter:restart" (sent when the boot screen hands over to the
+    // menu): show the first title in full again and start over from it.
+    const restart = () => {
+      if (!el.isConnected) {
+        document.removeEventListener("typewriter:restart", restart);
+        window.clearTimeout(timer);
+        return;
+      }
+      wordIndex = 0;
+      charIndex = words[0].length;
+      deleting = false;
+      textEl.textContent = words[0];
+      later(PAUSE_AFTER_TYPE + 600);
+    };
+    document.addEventListener("typewriter:restart", restart);
+  }
+
+  initTypewriter();
+  document.addEventListener("astro:page-load", initTypewriter);
+</script>
+
+<style>
+  .typewriter-cursor {
+    display: inline-block;
+    margin-left: 0.05em;
+    animation: typewriter-blink 1s step-end infinite;
+  }
+
+  @keyframes typewriter-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .typewriter-cursor {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>

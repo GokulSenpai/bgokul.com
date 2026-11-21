@@ -1,0 +1,204 @@
+---
+/**
+ * Narrative section shell: "the section is a book". Loads the book fonts,
+ * sets the paper/ink tokens. Navigation lives in the book itself: each page
+ * has a back link in its running head (marked data-nv-back), styled like
+ * the page, and Esc follows it with the site's fade. A chapter can pass its
+ * own palette.
+ */
+import { Font } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+
+interface Palette {
+  top: string;
+  bottom: string;
+  ink: string;
+  muted: string;
+  accent: string;
+}
+
+interface Props {
+  title: string;
+  description?: string;
+  palette?: Palette;
+  /** Colour behind everything (overscroll, short pages). Defaults to the
+   *  palette's bottom colour, else book paper. */
+  pageBg?: string;
+}
+
+const { title, description, palette, pageBg } = Astro.props;
+const bg = pageBg ?? palette?.bottom ?? "#f1e9da";
+// Set on html/body directly: they sit above .nv-root, so they can't see its
+// CSS variables.
+const pageBgCss = `html,body{background:${bg}}`;
+const style = palette
+  ? `--nv-top:${palette.top};--nv-bottom:${palette.bottom};--nv-ink:${palette.ink};--nv-muted:${palette.muted};--nv-accent:${palette.accent}`
+  : undefined;
+---
+
+<Layout title={title} description={description}>
+  <Fragment slot="head">
+    <Font cssVariable="--font-cormorant" preload={[{ subset: "latin", weight: 500, style: "normal" }]} />
+    <Font cssVariable="--font-garamond" preload={[{ subset: "latin", weight: 400, style: "normal" }]} />
+    <style is:inline set:html={pageBgCss}></style>
+  </Fragment>
+  <div class="nv-root" style={style}>
+    <slot />
+  </div>
+</Layout>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { whooshOut } from "@/components/home/bootSound";
+  import { soundOn } from "@/scripts/cameFrom";
+  import { unlock } from "@/scripts/achievements";
+
+  // Esc follows the page's own back link (Contents -> Save files, a chapter
+  // -> Contents), with the site's fade to black. So does clicking it.
+  let off: (() => void) | null = null;
+  function initBack() {
+    off?.();
+    off = null;
+    const link = document.querySelector<HTMLAnchorElement>("[data-nv-back]");
+    if (!link) return;
+    // A chapter (no book on the page): an achievement, the first time.
+    if (!document.querySelector("[data-book]")) unlock("bookworm");
+    let leaving = false;
+    const leave = () => {
+      if (leaving) return;
+      leaving = true;
+      // In a chapter (no book on the page): pulling back out of the page,
+      // the dive in reverse, with its whoosh falling away.
+      const inChapter = !document.querySelector("[data-book]");
+      if (inChapter && soundOn()) whooshOut();
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return void navigate(link.href);
+      if (inChapter) {
+        const root = document.querySelector<HTMLElement>(".nv-root");
+        if (root) {
+          root.style.transformOrigin = `50% ${window.scrollY + window.innerHeight / 2}px`;
+          document.documentElement.classList.add("nv-pullout");
+        }
+      }
+      // nv-closing: the contents page closes the book during the fade
+      // (and plays the closing sound on this event).
+      document.documentElement.classList.add("sys-leaving", "nv-closing");
+      document.dispatchEvent(new Event("nv:closing"));
+      setTimeout(() => navigate(link.href), 380);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable], dialog")) return;
+      if (document.querySelector("dialog[open]")) return;
+      leave();
+    };
+    const onClick = (e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      leave();
+    };
+    document.addEventListener("keydown", onKey);
+    link.addEventListener("click", onClick);
+    off = () => {
+      document.removeEventListener("keydown", onKey);
+      link.removeEventListener("click", onClick);
+    };
+  }
+  document.addEventListener("astro:page-load", initBack);
+</script>
+
+<style is:global>
+  /* Leaving a chapter: the page pulls back (shrinks away from you, around
+     the middle of the screen) while the screen fades. */
+  html.nv-pullout .nv-root {
+    transform: scale(0.88);
+    transition: transform 0.38s cubic-bezier(0.2, 0.6, 0.35, 1);
+  }
+  .nv-root {
+    /* Book paper (default chapter colours, and the contents spread). */
+    --nv-paper: #f1e9da;
+    --nv-paper-shade: #e2d6c1;
+    --nv-paper-ink: #2a221c;
+    --nv-paper-muted: #6e6053;
+    --nv-paper-rule: #c9b89c;
+    --nv-paper-accent: #7a2e22; /* oxblood, like a ribbon bookmark */
+    --nv-desk: #15110e;
+
+    /* Chapter colours: overridden per entry via `palette`. */
+    --nv-top: var(--nv-paper);
+    --nv-bottom: var(--nv-paper);
+    --nv-ink: var(--nv-paper-ink);
+    --nv-muted: var(--nv-paper-muted);
+    --nv-accent: var(--nv-paper-accent);
+
+    --nv-display: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+    --nv-body: var(--font-garamond), "EB Garamond", Georgia, serif;
+
+    flex: 1;
+    min-height: 100svh;
+    font-family: var(--nv-body);
+    font-size: 1.125rem;
+    line-height: 1.65;
+    font-feature-settings: "liga", "kern", "onum";
+  }
+  @media (min-width: 640px) {
+    .nv-root {
+      font-size: 1.1875rem;
+    }
+  }
+  .nv-root a {
+    color: inherit;
+  }
+  /* No single orphaned word on the last line of any paragraph. */
+  .nv-root :is(p, li, dd, dt, figcaption, blockquote) {
+    text-wrap: pretty;
+  }
+  .nv-root :focus-visible {
+    outline: 1px dashed currentColor;
+    outline-offset: 3px;
+  }
+
+  /* The site forces a scrollbar everywhere; here, only when needed, and
+     dark so it doesn't glow beside the page. */
+  html:has(.nv-root) {
+    overflow-y: auto;
+    scrollbar-color: #4a4038 transparent;
+  }
+
+  /* "Esc" beside a book's back link: a small keycap drawn like print. */
+  .nv-key {
+    display: inline-block;
+    margin-left: 0.5em;
+    padding: 0.05em 0.4em 0.1em;
+    border: 1px solid currentColor;
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    opacity: 0.7;
+    vertical-align: 0.1em;
+  }
+  @media (hover: none) {
+    .nv-key {
+      display: none;
+    }
+  }
+
+  /* Small caps label used for running heads, chapter labels, folios. */
+  .nv-caps {
+    font-family: var(--nv-display);
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  /* ⌂ Menu, beside the way back in the running head: quieter. */
+  .nv-home {
+    margin-left: 1.6em;
+    opacity: 0.7;
+  }
+  .nv-home:hover,
+  .nv-home:focus-visible {
+    opacity: 1;
+  }
+</style>

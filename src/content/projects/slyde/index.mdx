@@ -1,0 +1,100 @@
+---
+title: SLYDE
+tagline: A 2D puzzle game with multiple modes and custom images.
+roles: ['Design', 'Art', 'Programming', 'Music']
+tools: ['Unity', 'Photoshop', 'FL Studio', 'Figma']
+accentColor: '#9333ea'
+cover: ./cover.webp
+coverFit: contain
+trailerUrl: '/videos/slyde.webm'
+order: 7
+---
+
+import { Image } from "astro:assets";
+import puzzle1 from "./puzzle1.webp";
+import puzzle2 from "./puzzle2.webp";
+import puzzle3 from "./puzzle3.webp";
+import size4x4 from "./4x4.webp";
+import size5x5 from "./5x5.webp";
+import size6x6 from "./6x6.webp";
+import size7x7 from "./7x7.webp";
+
+## Table of contents
+
+## The project
+
+SLYDE is a 2D sliding puzzle game built around a simple idea: take the classic sliding puzzle and give the player more control over how they play it. Players can choose their own image, select the puzzle difficulty, and choose from several game modes focused on time, moves, or beating their previous records.
+
+The goal was to keep the core puzzle simple while giving players enough flexibility to make the experience their own.
+
+> [!INFO] Project focus
+> SLYDE was built around customization, replayability, and a simple puzzle experience without unnecessary complexity.
+
+---
+
+## Making the puzzle your own
+
+The main feature that separated SLYDE from a traditional sliding puzzle was custom image support. Players could select an image from their device and use it as the puzzle, and could also crop the image before starting to decide which part they wanted to solve. Once selected, the image is divided into tiles and shuffled into the puzzle.
+
+That turned the game from a collection of predefined puzzles into something the player could continually make for themselves.
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin:1em 0;">
+  <Image src={puzzle1} alt="SLYDE custom puzzle example 1" width={600} height={600} class="w-full h-auto" />
+  <Image src={puzzle2} alt="SLYDE custom puzzle example 2" width={600} height={600} class="w-full h-auto" />
+  <Image src={puzzle3} alt="SLYDE custom puzzle example 3" width={600} height={600} class="w-full h-auto" />
+</div>
+
+---
+
+## Difficulty through complexity
+
+Instead of adding complicated mechanics to increase difficulty, SLYDE keeps the rules the same and changes the number of tiles. The player already understands how the puzzle works, so increasing the number of pieces is enough on its own to create a significantly harder challenge.
+
+The available difficulties range from 3×3 up to 7×7.
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin:1em 0;">
+  <Image src={size4x4} alt="SLYDE 4×4 difficulty" width={500} height={500} class="w-full h-auto" />
+  <Image src={size5x5} alt="SLYDE 5×5 difficulty" width={500} height={500} class="w-full h-auto" />
+  <Image src={size6x6} alt="SLYDE 6×6 difficulty" width={500} height={500} class="w-full h-auto" />
+  <Image src={size7x7} alt="SLYDE 7×7 difficulty" width={500} height={500} class="w-full h-auto" />
+</div>
+
+---
+
+## Playing against yourself
+
+I wanted the game to work as more than a one-time puzzle, so SLYDE includes several modes that change what the player is trying to optimize: Casual for playing without pressure, Time Based for solving as quickly as possible, Time Based Set for solving within a chosen time limit, Move Based for solving using as few moves as possible, and Beat Yourself for competing against your previous best.
+
+The focus shifts from simply solving the puzzle to solving it more efficiently. Time and move counts give players a simple way to measure that improvement.
+
+---
+
+## Designing the experience
+
+Because the underlying puzzle is straightforward, I focused on making the surrounding experience feel simple too. The UI was deliberately kept minimal, with clear menus for selecting the difficulty, game mode, and image before entering the puzzle.
+
+I also experimented with screen sweep transitions between menus rather than cutting directly from one screen to another. The goal was to make the game feel cohesive without adding unnecessary UI or visual noise.
+
+---
+
+## What I learned
+
+SLYDE taught me how much depth can come from building systems around a very simple core mechanic. The puzzle itself is straightforward; most of the design work came from deciding how players could customize it, how difficulty should scale, and how different game modes could give the same puzzle different goals.
+
+I also learned that not every project needs a complicated mechanic to be worth making. Sometimes the interesting design challenge is taking something players already understand and asking how to make it more personal, replayable, and satisfying.
+
+---
+
+## Project documents
+
+### One pager
+
+A visual overview of the game's concept, features, and core experience.
+
+<a href="https://drive.google.com/file/d/1wlQglTF0cswOE7RdY4Ovl2Rfd8nvigIN/view" target="_blank" rel="noopener noreferrer">View one pager</a>
+
+### Original game design document
+
+The original GDD covering SLYDE's gameplay loop, puzzle mechanics, difficulty progression, game modes, scoring system, UI, and other systems.
+
+<a href="https://drive.google.com/file/d/1X4Sbvqm0j8Ao_mWK2fhb5I6YLguCAjXt/view" target="_blank" rel="noopener noreferrer">View original GDD</a>

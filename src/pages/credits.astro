@@ -1,0 +1,251 @@
+---
+/**
+ * The Credits: the platinum's prize. Locked until every achievement is
+ * found (it lives in the visitor's browser, so the check runs there).
+ * Unlocked: a thank-you note, the credits, and day and night wallpapers:
+ * the lighthouse scene behind it (gold beam and all) rendered at the
+ * screen's own size, crisp pixel art scaled up with no blur, as a PNG.
+ */
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import NightScene from "@/components/home/NightScene.astro";
+import config from "@/config";
+---
+
+<Layout title={`Credits | ${config.site.title}`}>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex" />
+  </Fragment>
+  <div class="desk" aria-hidden="true">
+    <NightScene />
+    <div class="dim"></div>
+  </div>
+  <Header />
+
+  <main id="main-content" class="credits" data-credits>
+    <!-- Locked (until the platinum) -->
+    <section class="win locked" data-locked>
+      <p class="kicker">Credits</p>
+      <h1 class="title">Locked</h1>
+      <p class="line">Find every achievement to open the Credits. <span data-left></span></p>
+      <a class="btn" href="/achievements">See achievements ▶</a>
+    </section>
+
+    <!-- Unlocked -->
+    <section class="win open" data-open hidden>
+      <p class="kicker">✦ Platinum: Keeper of the Light</p>
+      <h1 class="title">Thanks for playing</h1>
+      <p class="note">
+        You found everything. I built this place to feel like the games I love, and you played
+        it like one. That means a lot.
+      </p>
+      <p class="note">
+        The lighthouse burns gold now, for good. And it's yours to keep: day or night, whenever you
+        like, from the top of the main menu. Your character's wardrobe is open too, on the
+        Achievements screen. Wear any class you like.
+      </p>
+      <p class="sign">Gokul</p>
+
+      <dl class="roll">
+        <div><dt>Made by</dt><dd>Gokul Naga Sai</dd></div>
+        <div><dt>Built with</dt><dd>Astro</dd></div>
+        <div><dt>Sounds</dt><dd>Synthesized live</dd></div>
+        <div><dt>Type</dt><dd>Pixelify Sans, Outfit, EB Garamond</dd></div>
+        <div><dt>Tested by</dt><dd>You, apparently, very thoroughly</dd></div>
+      </dl>
+
+      <div class="actions">
+        <button type="button" class="btn" data-wallpaper="day">Day wallpaper</button>
+        <button type="button" class="btn" data-wallpaper="night">Night wallpaper</button>
+        <a class="btn ghost" href="/">Main menu</a>
+      </div>
+      <p class="small">The lighthouse behind this window, at your screen's size.</p>
+    </section>
+  </main>
+</Layout>
+
+<script>
+  import { isPlatinum, count, ACHIEVEMENTS } from "@/scripts/achievements";
+  import { achievement } from "@/components/home/bootSound";
+  import { soundOn } from "@/scripts/cameFrom";
+
+  function init() {
+    const root = document.querySelector<HTMLElement>("[data-credits]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+    const locked = root.querySelector<HTMLElement>("[data-locked]")!;
+    const open = root.querySelector<HTMLElement>("[data-open]")!;
+    if (!isPlatinum()) {
+      const left = ACHIEVEMENTS.length - count();
+      root.querySelector("[data-left]")!.textContent = `${left} to go.`;
+      return;
+    }
+    locked.hidden = true;
+    open.hidden = false;
+    // The curtain call: the achievement fanfare, a little fuller.
+    if (soundOn()) achievement(0.55);
+
+    // The wallpapers, day and night: the scene behind switches to the one
+    // asked for (and stays, as a preview), then its canvas is saved, scaled
+    // up by a whole number with no smoothing (crisp pixels), to at least
+    // this screen's real size.
+    const save = (scene: string) => {
+      const src = document.querySelector<HTMLCanvasElement>("[data-night]");
+      if (!src) return;
+      const want = Math.max(window.innerWidth, window.innerHeight) * (window.devicePixelRatio || 1);
+      const k = Math.max(1, Math.ceil(want / Math.max(src.width, src.height)));
+      const out = document.createElement("canvas");
+      out.width = src.width * k;
+      out.height = src.height * k;
+      const ctx = out.getContext("2d")!;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(src, 0, 0, out.width, out.height);
+      out.toBlob(blob => {
+        if (!blob) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `bgokul-lighthouse-${scene}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      }, "image/png");
+    };
+    root.querySelectorAll<HTMLButtonElement>("[data-wallpaper]").forEach(b =>
+      b.addEventListener("click", () => {
+        const scene = b.dataset.wallpaper!;
+        const html = document.documentElement;
+        if (html.dataset.scene === scene) return save(scene);
+        // Switch the scene, give it a moment to draw, then save.
+        html.dataset.scene = scene;
+        document.dispatchEvent(new Event("scene:change"));
+        setTimeout(() => save(scene), 300);
+      })
+    );
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  .desk {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+  }
+  .dim {
+    position: absolute;
+    inset: 0;
+    background: rgb(5 6 20 / 0.45);
+  }
+  .credits {
+    display: grid;
+    place-items: center;
+    flex: 1;
+    padding: 2rem 1rem 3rem;
+  }
+  .win {
+    width: min(100%, 36rem);
+    padding: 1.4rem 1.6rem;
+    border: 3px solid rgb(154 160 214 / 0.45);
+    border-radius: 6px;
+    background: linear-gradient(180deg, rgb(32 38 104 / 0.92), rgb(14 17 56 / 0.92));
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.7),
+      6px 6px 0 rgb(3 4 14 / 0.8);
+    color: #efecdc;
+  }
+  .open {
+    border-color: #ffd27a;
+  }
+  .kicker {
+    margin: 0;
+    color: #ffd27a;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .title {
+    margin: 0.4rem 0 0.8rem;
+    font-family: var(--font-pixel), monospace;
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    font-variant-ligatures: none;
+    font-weight: 600;
+    text-shadow: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+  }
+  .note,
+  .line {
+    margin: 0 0 0.8rem;
+    color: rgb(239 236 220 / 0.85);
+    line-height: 1.6;
+  }
+  .sign {
+    margin: 0 0 1.2rem;
+    color: #ffd27a;
+    font-family: var(--font-pixel), monospace;
+  }
+  .roll {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0 0 1.4rem;
+    padding: 0.9rem 0;
+    border-block: 1px solid rgb(154 160 214 / 0.25);
+  }
+  .roll div {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .roll dt {
+    color: #9aa0d6;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding-top: 0.15rem;
+  }
+  .roll dd {
+    margin: 0;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 1.1rem;
+    border: 2px solid #ffd27a;
+    border-radius: 3px;
+    background: #ffd27a;
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.85);
+    color: #07081a;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .btn.ghost {
+    background: transparent;
+    color: #ffd27a;
+  }
+  .btn:hover,
+  .btn:focus-visible {
+    outline: none;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 rgb(3 4 14 / 0.85);
+  }
+  .small {
+    margin: 0.9rem 0 0;
+    color: #9aa0d6;
+    font-size: 0.85rem;
+  }
+  @media (max-width: 640px) {
+    .roll div {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+  }
+</style>

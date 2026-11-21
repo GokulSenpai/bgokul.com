@@ -1,0 +1,565 @@
+---
+/**
+ * A breakdown (case file). One shared skeleton, the same reading structure
+ * as the game pages' design notes:
+ *
+ *   hero (title, the question it answers, date, optional cover art)
+ *   contents on the left (sticky, highlights where you are; a dropdown
+ *   on phones) + numbered sections in a comfortable reading column.
+ *
+ * Each breakdown can then wear its own look, picked by `theme` in its
+ * frontmatter (e.g. "slender": the sections are the eight pages, the
+ * contents collects them as you read, static builds up). Without a theme
+ * it's the site's plain night style.
+ */
+import { getCollection, render } from "astro:content";
+import { Image, Font } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
+import ImageLightbox from "@/components/ImageLightbox.astro";
+import SlenderTheme from "@/components/breakdowns/SlenderTheme.astro";
+import SlenderEnd from "@/components/breakdowns/SlenderEnd.astro";
+import config from "@/config";
+
+export async function getStaticPaths() {
+  const breakdowns = await getCollection("breakdowns", ({ data }) =>
+    import.meta.env.PROD ? !data.draft : true
+  );
+  return breakdowns.map(breakdown => ({
+    params: { slug: breakdown.id },
+    props: { breakdown },
+  }));
+}
+
+const { breakdown } = Astro.props;
+const { title, description, pubDatetime, tags, cover, theme } = breakdown.data;
+const { Content, headings } = await render(breakdown);
+
+const sections = headings.filter(h => h.depth === 2);
+const pad = (n: number) => String(n).padStart(2, "0");
+const date = pubDatetime?.toLocaleDateString("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const slender = theme === "slender";
+// What the sections are called in the contents ("Pages" for Slender).
+const unit = slender ? "Pages" : "Contents";
+---
+
+<Layout title={`${title} | ${config.site.title}`} description={description}>
+  <!-- The reading font (same as the game pages' design notes). -->
+  <Font cssVariable="--font-console" preload />
+  {slender && <Font cssVariable="--font-scrawl" preload />}
+  <Header />
+
+  <!-- The way back is the HUD window above (◀ Breakdowns, or Esc). -->
+  <main
+    id="main-content"
+    class="case"
+    data-case
+    data-theme={theme}
+    style={`--total: "${sections.length}"`}
+  >
+    <header class:list={["hero", { "has-cover": cover }]} data-hero>
+      {
+        cover && (
+          <div class="hero-art" aria-hidden="true">
+            <Image class="art-dim" src={cover} alt="" widths={[480, 760]} sizes="(min-width: 900px) 46vw, 90vw" loading="eager" />
+            {/* Slender: a second copy, seen only inside the flashlight. */}
+            {slender && (
+              <Image class="art-lit" src={cover} alt="" widths={[480, 760]} sizes="(min-width: 900px) 46vw, 90vw" loading="eager" />
+            )}
+          </div>
+        )
+      }
+      <div class="hero-text">
+        <p class="kicker">Game breakdown</p>
+        <h1 class="case-title">{title}</h1>
+        <p class="lede">{description}</p>
+        <p class="meta">
+          {date && <time datetime={pubDatetime?.toISOString()}>{date}</time>}
+          <span aria-hidden="true">·</span>
+          <span>{sections.length} {slender ? "pages" : "sections"}</span>
+        </p>
+      </div>
+      {slender && <p class="hero-hint" aria-hidden="true">Collect all {sections.length} pages</p>}
+    </header>
+
+    <section class:list={["notes", { "has-toc": sections.length > 1 }]}>
+      {
+        sections.length > 1 && (
+          <aside class="toc" aria-label="Contents">
+            <p class="toc-label">
+              {unit}
+              {slender && (
+                <span class="count" aria-live="polite">
+                  <span data-count>0</span>/{sections.length}
+                </span>
+              )}
+            </p>
+            <ol>
+              {sections.map((s, i) => (
+                <li>
+                  <a href={`#${s.slug}`} data-toc-link={s.slug}>
+                    <span class="toc-num">{pad(i + 1)}</span>
+                    <span>{s.text}</span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </aside>
+        )
+      }
+
+      <div class="notes-col">
+        {
+          sections.length > 1 && (
+            <details class="toc-mobile">
+              <summary>
+                {unit} · {sections.length} {slender ? "pages" : "sections"}
+              </summary>
+              <ol>
+                {sections.map((s, i) => (
+                  <li>
+                    <a href={`#${s.slug}`}>
+                      <span class="toc-num">{pad(i + 1)}</span> {s.text}
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )
+        }
+        <article data-lightbox class="case-body">
+          <Content />
+        </article>
+        {
+          tags.length > 0 && (
+            <ul class="tags">
+              {tags.map(tag => (
+                <li>#{tag}</li>
+              ))}
+            </ul>
+          )
+        }
+        {slender && cover && <SlenderEnd figure={cover} total={sections.length} />}
+      </div>
+    </section>
+
+    <BackToTopButton />
+    <ImageLightbox />
+  </main>
+
+  {slender && <SlenderTheme />}
+  <Footer />
+</Layout>
+
+<script>
+  import { unlock } from "@/scripts/achievements";
+  import { screwIn } from "@/components/home/bootSound";
+  import { soundOn } from "@/scripts/cameFrom";
+
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    const root = document.querySelector<HTMLElement>("[data-case]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+
+    // Leaving (◀ Breakdowns or Esc): the screw goes back in, right away (the
+    // list then shows this case file's tile seating back together).
+    document.addEventListener("sys:leaving", () => soundOn() && screwIn(), { signal });
+    unlock("taking-apart");
+
+    // Contents: highlight the section being read, and mark every section
+    // you've reached ("collected"). The page gets --progress (0 to 1), and
+    // a counter if the theme shows one.
+    const links = [...root.querySelectorAll<HTMLAnchorElement>("[data-toc-link]")];
+    const heads = links
+      .map(a => document.getElementById(a.dataset.tocLink!))
+      .filter((h): h is HTMLElement => !!h);
+    const count = root.querySelector<HTMLElement>("[data-count]");
+    let reached = 0;
+    const onScroll = () => {
+      if (!heads.length) return;
+      const line = window.innerHeight * 0.33;
+      let current = -1;
+      heads.forEach((h, i) => {
+        if (h.getBoundingClientRect().top <= line) current = i;
+      });
+      // At the very bottom, the last section counts as reached.
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) current = heads.length - 1;
+      links.forEach((a, i) => a.classList.toggle("is-active", i === Math.max(current, 0)));
+      const now = Math.max(reached, current + 1);
+      if (now !== reached) {
+        reached = now;
+        links.forEach((a, i) => a.classList.toggle("is-collected", i < reached));
+        root.style.setProperty("--progress", String(reached / heads.length));
+        if (count) count.textContent = String(reached);
+        root.dispatchEvent(new CustomEvent("case:collect", { detail: { reached, total: heads.length } }));
+      }
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { signal, passive: true });
+
+    // Close the phone contents list after picking a section.
+    root.querySelectorAll<HTMLAnchorElement>(".toc-mobile a").forEach(a =>
+      a.addEventListener("click", () => a.closest("details")?.removeAttribute("open"), { signal })
+    );
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  /* ── the shared case file (plain night style) ─────────────── */
+  .case {
+    /* Colours the write-up's components read (Specs, graphs, loops). */
+    --bd-bg: #07081a;
+    --bd-text: rgb(239 236 220 / 0.88);
+    --bd-strong: #fff;
+    --bd-accent: #f4b740;
+    --bd-label: #9aa0d6;
+    --bd-dim: rgb(154 160 214 / 0.7);
+    --bd-line: rgb(154 160 214 / 0.15);
+    --bd-card: rgb(255 255 255 / 0.02);
+    position: relative;
+    color: var(--bd-text);
+  }
+
+  /* One frame for the whole case file: exactly the contents + reading
+     column, so the HUD windows (◀ Breakdowns, Case file), the hero and the
+     notes all share the same left and right edges. Set on <html> so the
+     HUD (outside <main>) can use it too. */
+  :global(html:has(main.case)) {
+    --pad: clamp(1rem, 4vw, 2.5rem);
+    --frame: 42rem;
+    --page: calc(var(--frame) + 2 * var(--pad));
+  }
+  @media (min-width: 1024px) {
+    :global(html:has(main.case)) {
+      --frame: calc(220px + clamp(3rem, 6vw, 6rem) + 42rem);
+    }
+  }
+  :global(html:has(main.case) .sysbar-inner) {
+    max-width: var(--page);
+    padding-inline: var(--pad);
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    display: grid;
+    align-items: end;
+    max-width: var(--page);
+    margin: 0 auto;
+    padding: clamp(2.5rem, 8vh, 5rem) var(--pad) clamp(2rem, 5vh, 3.5rem);
+  }
+  .hero-text {
+    position: relative;
+    z-index: 1;
+    max-width: 40rem;
+  }
+  .kicker {
+    margin: 0 0 1rem;
+    color: var(--bd-accent);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.8rem;
+    font-variant-ligatures: none;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+  .case-title {
+    margin: 0;
+    color: var(--bd-strong);
+    font-family: var(--font-pixel), monospace;
+    font-size: clamp(2.2rem, 5.5vw, 4rem);
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+  .lede {
+    margin: 1.25rem 0 0;
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: clamp(1.1rem, 1.6vw, 1.3rem);
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.25rem 0 0;
+    color: var(--bd-dim);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+  }
+  .hero-art {
+    display: none;
+  }
+
+  /* Notes: contents + reading column (as on the game pages) */
+  .notes {
+    max-width: var(--page);
+    margin: 0 auto;
+    padding: clamp(1.5rem, 5vh, 3rem) var(--pad) 4rem;
+  }
+  .notes-col {
+    max-width: 42rem;
+    margin: 0 auto;
+  }
+  @media (min-width: 1024px) {
+    .notes.has-toc {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 42rem);
+      justify-content: center;
+      gap: clamp(3rem, 6vw, 6rem);
+    }
+    .notes.has-toc .notes-col {
+      margin: 0;
+    }
+  }
+  .toc {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .toc {
+      display: block;
+      position: sticky;
+      top: 5rem;
+      align-self: start;
+      max-height: calc(100vh - 6rem);
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+  }
+  .toc-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 1rem;
+    color: var(--bd-label);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .toc ol,
+  .toc-mobile ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .toc a {
+    display: flex;
+    gap: 0.7rem;
+    padding: 0.45rem 0 0.45rem 0.9rem;
+    border-left: 3px solid var(--bd-line);
+    color: var(--bd-label);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.88rem;
+    line-height: 1.35;
+    text-decoration: none;
+    transition:
+      color 0.2s,
+      border-color 0.2s;
+  }
+  .toc a:hover,
+  .toc a:focus-visible {
+    color: var(--bd-strong);
+    outline: none;
+  }
+  .toc a.is-active {
+    border-color: var(--bd-accent);
+    color: var(--bd-accent);
+  }
+  .toc-num {
+    color: var(--bd-dim);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.78rem;
+    padding-top: 0.08rem;
+  }
+  .toc-mobile {
+    margin: 0 0 2.5rem;
+    border: 3px solid rgb(154 160 214 / 0.4);
+    border-radius: 6px;
+    background: linear-gradient(180deg, rgb(32 38 104 / 0.6), rgb(14 17 56 / 0.6));
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.75);
+  }
+  .toc-mobile summary {
+    padding: 0.9rem 1.1rem;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .toc-mobile ol {
+    padding: 0 1.1rem 0.9rem;
+  }
+  .toc-mobile a {
+    display: block;
+    padding: 0.5rem 0;
+    color: var(--bd-label);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.92rem;
+    text-decoration: none;
+  }
+  @media (min-width: 1024px) {
+    .toc-mobile {
+      display: none;
+    }
+  }
+
+  /* The write-up: the game pages' reading style. */
+  .case-body {
+    color: var(--bd-text);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: clamp(1.05rem, 1.15vw, 1.15rem);
+    line-height: 1.75;
+    counter-reset: sec;
+  }
+  .case-body :global(p),
+  .case-body :global(li),
+  .case-body :global(td) {
+    text-wrap: pretty;
+  }
+  .case-body :global(p) {
+    margin: 0 0 1.3em;
+  }
+  .case-body :global(strong) {
+    color: var(--bd-strong);
+    font-weight: 600;
+  }
+  .case-body :global(a) {
+    color: var(--bd-accent);
+    text-underline-offset: 3px;
+  }
+  .case-body :global(h2) {
+    margin: 5rem 0 1.4rem;
+    color: var(--bd-strong);
+    font-size: clamp(1.6rem, 2.6vw, 2.15rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    scroll-margin-top: 5rem;
+    counter-increment: sec;
+  }
+  .case-body :global(h2)::before {
+    content: counter(sec, decimal-leading-zero);
+    display: block;
+    margin-bottom: 0.55rem;
+    color: var(--bd-accent);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+  }
+  .case-body :global(> h2:first-child) {
+    margin-top: 0;
+  }
+  .case-body :global(h3) {
+    margin: 2.75rem 0 0.9rem;
+    color: var(--bd-strong);
+    font-size: 1.3rem;
+    font-weight: 600;
+  }
+  .case-body :global(h4) {
+    margin: 2rem 0 0.6rem;
+    color: var(--bd-accent);
+    font-size: 1.02rem;
+    font-weight: 600;
+  }
+  .case-body :global(ul),
+  .case-body :global(ol) {
+    margin: 0 0 1.5em;
+    padding-left: 1.3em;
+  }
+  .case-body :global(ul) {
+    list-style: disc;
+  }
+  .case-body :global(li) {
+    margin: 0.4em 0;
+  }
+  .case-body :global(li > ul) {
+    margin: 0.3em 0 0.5em;
+    list-style: circle;
+  }
+  .case-body :global(li::marker) {
+    color: var(--bd-dim);
+  }
+  .case-body :global(img) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 2.25rem auto;
+    border: 3px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    box-shadow: 5px 5px 0 rgb(3 4 14 / 0.75);
+  }
+  .case-body :global(blockquote) {
+    margin: 2rem 0;
+    padding: 0.2rem 0 0.2rem 1.4rem;
+    border-left: 3px solid var(--bd-accent);
+    color: var(--bd-strong);
+    font-size: 1.15em;
+    font-style: italic;
+  }
+  .case-body :global(blockquote p) {
+    margin: 0;
+  }
+  .case-body :global(table) {
+    width: 100%;
+    margin: 1.5rem 0 2rem;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  .case-body :global(th),
+  .case-body :global(td) {
+    padding: 0.7rem 1rem 0.7rem 0;
+    border-bottom: 1px solid var(--bd-line);
+    text-align: left;
+    vertical-align: top;
+  }
+  .case-body :global(th) {
+    color: var(--bd-label);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  /* Knowledge up, fear down (two rows of arrows). */
+  .case-body :global(.knowledge) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 1.75rem 0;
+    padding: 1rem 0;
+    border-block: 1px solid var(--bd-line);
+    font-weight: 600;
+  }
+  .case-body :global(.knowledge .up) {
+    color: #7fd18b;
+  }
+  .case-body :global(.knowledge .down) {
+    color: #e5735f;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 3rem 0 0;
+    padding: 1.5rem 0 0;
+    border-top: 1px solid var(--bd-line);
+    color: var(--bd-dim);
+    font-size: 0.9rem;
+    list-style: none;
+  }
+</style>

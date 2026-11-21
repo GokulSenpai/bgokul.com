@@ -1,0 +1,77 @@
+---
+/**
+ * An excerpt set as a page from the narrator's journal: ruled lines, an
+ * amber margin rule, a small label. Keeps the book's own words visibly
+ * apart from the framing text around them.
+ */
+interface Props {
+  label?: string;
+}
+const { label } = Astro.props;
+---
+
+<figure class="journal">
+  {label && <figcaption class="nv-caps">{label}</figcaption>}
+  <div class="journal-page">
+    <slot />
+  </div>
+</figure>
+
+<style>
+  .journal {
+    margin: 0;
+  }
+  figcaption {
+    margin-bottom: 0.6rem;
+    font-size: 0.72em;
+    text-align: left;
+    color: var(--nv-muted);
+  }
+  .journal-page {
+    --line: 1.75rem;
+    position: relative;
+    padding: calc(var(--line) * 0.75) 1.5rem calc(var(--line) * 0.75) 2.75rem;
+    border: 1px solid rgb(220 216 204 / 0.08);
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0 calc(var(--line) - 1px),
+        rgb(220 216 204 / 0.07) calc(var(--line) - 1px) var(--line)
+      ),
+      rgb(255 255 255 / 0.025);
+    /* Each rule sits just under the text's baseline: a tile's line is at its
+       bottom edge, so start the pattern at padding-top (0.75 line) minus the
+       gap between baseline and line-box bottom (~0.22 line). */
+    background-position: 0 calc(var(--line) * 0.53);
+  }
+  @media (min-width: 640px) {
+    .journal-page {
+      padding-inline: 4rem 2.5rem;
+    }
+  }
+  /* The margin rule, as on ruled paper. */
+  .journal-page::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1.6rem;
+    width: 1px;
+    background: var(--nv-accent);
+    opacity: 0.45;
+  }
+  @media (min-width: 640px) {
+    .journal-page::before {
+      left: 2.6rem;
+    }
+  }
+  .journal-page :global(p) {
+    margin: 0;
+    font-size: 0.95em;
+    font-style: italic;
+    line-height: var(--line);
+  }
+  .journal-page :global(p + p) {
+    margin-top: var(--line);
+  }
+</style>

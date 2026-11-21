@@ -1,0 +1,401 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./typography.css";
+@import "rehype-callouts/theme/obsidian";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* ── pixel cursors ───────────────────────────────────────────────
+   Native CSS cursors (the browser draws them, so they never lag): a pixel
+   arrow, a pixel hand on anything you can click, and (set per page) an
+   amber sparkle over the parts of a scene that react to clicks. Text
+   fields keep the text cursor. Phones never see any of it. */
+html {
+  cursor: url("/cursors/arrow.svg") 0 0, auto;
+}
+:is(a[href], button:not(:disabled), summary, select, label[for], [role="button"], [data-entry], [data-chapter], input[type="checkbox"], input[type="radio"]) {
+  cursor: url("/cursors/hand.svg") 9 0, pointer !important;
+}
+:is(input:not([type="checkbox"], [type="radio"], [type="button"], [type="submit"]), textarea, [contenteditable="true"]) {
+  cursor: text;
+}
+
+/* ── text selection ──────────────────────────────────────────────
+   The game parts (menus, HUD windows, cartridges, lists, the scenes)
+   can't be selected, so dragging the mouse never highlights the UI by
+   accident. Anything worth reading or copying still can be. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+:is(input, textarea, [contenteditable="true"], pre, code, kbd,
+  article, .nb-prose, .case-body, .notes-body, .notes-page .release, .notes-page .mast, .reqs,
+  .nv-root .body, .cmd-screen, .stage, .ach .desc, .roll, .note) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Game pages: callouts follow the per-game accent color instead of rehype-callouts' fixed palette. */
+.theme-scope [data-callout] {
+  --rc-color-light: var(--accent);
+  --rc-color-dark: var(--accent);
+}
+
+/* Game pages: section dividers (metadata bar, body `---` breaks) pick up
+   the accent color so they stay visible against a light background. */
+.theme-scope .project-meta,
+.theme-scope .app-prose hr {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Game pages: the "Table of contents" block is collapsed into a <details>
+   by remark-collapse, which also silently swallows any `---` divider
+   placed right after it — so the divider below it has to be CSS, not
+   markdown. */
+.theme-scope .app-prose details:not(.callout) {
+  display: block;
+}
+.theme-scope .app-prose h2#table-of-contents ~ details {
+  margin-bottom: 1.5em;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--accent) 40%, transparent);
+  padding-bottom: 1.25em;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-accent/75;
+    scrollbar-width: auto;
+    scrollbar-color: var(--color-muted) transparent;
+  }
+  a,
+  button,
+  #main-content {
+    @apply outline-accent outline-offset-1 focus-visible:no-underline focus-visible:outline-2 focus-visible:outline-dashed;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 800;
+  }
+}
+
+@utility max-w-app {
+  @apply max-w-3xl;
+}
+
+@utility app-layout {
+  @apply max-w-app mx-auto w-full px-4;
+}
+
+@utility active-nav {
+  @apply underline decoration-wavy decoration-2 underline-offset-8;
+}
+
+:target {
+  scroll-margin-block: 1rem;
+}
+
+/*
+  Gradient-border card. Originally ported to match the official Astro
+  starter's `.link-card` technique (a 400%-sized background sliding via
+  `background-position` on hover). That approach turned out to have a real
+  cross-browser bug: animating `background-position` on a large background
+  clipped by `border-radius` can leave a 1px un-repainted rounding seam,
+  and which card shows it depends on the exact (often fractional) pixel
+  width the grid gives that column — so it moves between cards depending
+  on layout width rather than ever being reliably fixed.
+
+  Rewritten to use a masked pseudo-element that cross-fades via `opacity`
+  instead — same visual result (thin border at rest, vivid gradient reveal
+  on hover), but opacity transitions don't have that per-width rounding
+  sensitivity, so there's no seam to chase.
+*/
+.gradient-card {
+  position: relative;
+  display: block;
+  height: 100%;
+  padding: 0.15rem;
+  border-radius: 1rem;
+  background-color: var(--border);
+}
+
+.gradient-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.15rem;
+  background-image: linear-gradient(
+    45deg,
+    var(--accent) 0%,
+    color-mix(in srgb, var(--accent) 55%, var(--foreground)) 60%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.gradient-card:is(:hover, :focus-within)::before {
+  opacity: 1;
+}
+
+.gradient-card-inner {
+  display: block;
+  height: 100%;
+  background-color: var(--background);
+  border-radius: 0.85rem;
+}
+
+/* Ported from the source: `.link-card:is(:hover,:focus-within) h2{color:#4F39FA}`
+   — the card's own heading swaps to the accent color on hover. */
+.gradient-card-heading {
+  transition: color 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gradient-card:is(:hover, :focus-within) .gradient-card-heading {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-card::before,
+  .gradient-card-heading {
+    transition: none;
+  }
+}
+
+/* ── Shared "game UI" pieces, matching the main menu ─────────────────
+   A heading in the menu's pixel font with its hard drop shadow. */
+.pixel-heading {
+  font-family: var(--font-pixel), monospace;
+  font-variant-ligatures: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-shadow: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+}
+/* A small section label, like "LOAD GAME" on the save screen. */
+.pixel-kicker {
+  font-family: var(--font-pixel), monospace;
+  font-variant-ligatures: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+/* A list entry drawn as a small JRPG window, like the save files: used by
+   journal entries (Card) and breakdowns (SimpleCard). */
+.entry {
+  margin: 0.85rem 0;
+  list-style: none;
+}
+.entry-link {
+  position: relative;
+  display: block;
+  padding: 0.85rem 1.1rem 0.95rem;
+  border: 3px solid rgb(154 160 214 / 0.35);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgb(32 38 104 / 0.55) 0%, rgb(14 17 56 / 0.55) 100%);
+  box-shadow:
+    inset 0 0 0 2px rgb(5 6 20 / 0.7),
+    5px 5px 0 rgb(3 4 14 / 0.7);
+  color: var(--foreground);
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.entry-link:hover,
+.entry-link:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  transform: translateX(6px);
+}
+.entry-cursor {
+  position: absolute;
+  top: 1.05rem;
+  left: -1.5rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.entry-link:hover .entry-cursor,
+.entry-link:focus-visible .entry-cursor {
+  opacity: 1;
+}
+.entry-title {
+  margin: 0;
+  color: var(--foreground);
+  font-family: var(--font-pixel), monospace;
+  font-size: 1.25rem;
+  font-variant-ligatures: none;
+  font-weight: 600;
+  line-height: 1.25;
+  text-shadow: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+  transition: color 0.15s;
+}
+.entry-link:hover .entry-title,
+.entry-link:focus-visible .entry-title {
+  color: var(--accent);
+}
+.entry-date {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--muted-foreground);
+}
+.entry-desc {
+  margin: 0.45rem 0 0;
+  color: rgb(239 236 220 / 0.8);
+}
+@media (max-width: 640px) {
+  .entry-cursor {
+    display: none;
+  }
+  .entry-link:hover,
+  .entry-link:focus-visible {
+    transform: none;
+  }
+}
+
+/* Leaving a screen by its back button or Esc: a short fade to night-black
+   before the next screen (set as html.sys-leaving; the page swap clears it). */
+/* ── achievement toast (src/scripts/achievements.ts) ─────────────
+   A small navy window with an amber trophy that slides down from the top,
+   holds for a moment, and slides away. One at a time; never clickable, so
+   it never gets in the way. On phones it sits below the HUD windows. */
+.ach-toast {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.55rem 1.1rem 0.55rem 0.55rem;
+  border: 2px solid rgb(255 210 122 / 0.6);
+  border-radius: 4px;
+  background: linear-gradient(180deg, #1c2160, #0e1238);
+  box-shadow:
+    inset 0 0 0 2px rgb(5 6 20 / 0.7),
+    4px 4px 0 rgb(3 4 14 / 0.8);
+  font-family: var(--font-pixel), ui-monospace, monospace;
+  font-variant-ligatures: none;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -140%);
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.4, 0.64, 1),
+    opacity 0.25s ease;
+}
+.ach-toast.is-in {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.ach-toast-icon {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 3px;
+  background: #ffd27a;
+  color: #07081a;
+}
+.ach-toast-icon svg {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+.ach-toast.is-in .ach-toast-icon {
+  animation: ach-shine 0.6s steps(3) 0.35s;
+}
+@keyframes ach-shine {
+  50% {
+    background: #fff1c4;
+  }
+}
+.ach-toast-text {
+  display: grid;
+  gap: 0.15rem;
+  text-align: left;
+}
+.ach-toast-kicker {
+  color: #ffd27a;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.ach-toast-title {
+  color: #efecdc;
+  font-size: 0.98rem;
+}
+/* The platinum: gold all over. */
+.ach-toast.is-gold {
+  border-color: #ffd27a;
+  background: linear-gradient(180deg, #4a3a12, #2a1f08);
+  box-shadow:
+    inset 0 0 0 2px rgb(5 6 20 / 0.5),
+    4px 4px 0 rgb(3 4 14 / 0.8),
+    0 0 24px rgb(255 210 122 / 0.35);
+}
+.ach-toast.is-gold .ach-toast-icon {
+  background: linear-gradient(180deg, #fff1c4, #ffd27a);
+}
+@media (max-width: 640px) {
+  .ach-toast {
+    top: 4.25rem;
+    max-width: calc(100vw - 2rem);
+  }
+  .ach-toast-kicker {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+  }
+  .ach-toast-title {
+    font-size: 0.9rem;
+  }
+  .ach-toast-icon {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ach-toast {
+    transform: translate(-50%, 0);
+    transition: opacity 0.2s ease;
+  }
+  .ach-toast.is-in .ach-toast-icon {
+    animation: none;
+  }
+}
+
+html.sys-leaving body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: #04050c;
+  animation: sys-fade 0.35s ease-in forwards;
+}
+/* Closing the narrative book: the fade darkens from the first frame, in
+   step with the page lifting (same timing as its lift-closed). */
+html.sys-leaving.nv-closing body::after {
+  animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+}
+@keyframes sys-fade {
+  from {
+    opacity: 0;
+  }
+}

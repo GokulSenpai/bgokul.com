@@ -1,0 +1,482 @@
+---
+import { type CollectionEntry, getCollection, render } from "astro:content";
+import PostLayout from "@/layouts/PostLayout.astro";
+import { Image } from "astro:assets";
+import dayjs from "dayjs";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Notebook from "@/components/journal/Notebook.astro";
+import { getPostSlug, getPostUrl } from "@/utils/getPostPaths";
+import { getSortedPosts } from "@/utils/getSortedPosts";
+import { slugifyStr } from "@/utils/slugify";
+import { readingTime } from "@/utils/readingTime";
+import ShareLinks from "./_components/ShareLinks.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
+import ImageLightbox from "@/components/ImageLightbox.astro";
+import AdjacentPostNav from "./_components/AdjacentPostNav.astro";
+import config from "@/config";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("posts");
+  const sortedPosts = getSortedPosts(posts);
+
+  return sortedPosts.map((post, index) => ({
+    params: { slug: getPostSlug(post.id, post.filePath) },
+    props: {
+      post,
+      // sortedPosts is newest-first, so "older" (prev) is a higher index
+      // and "newer" (next) is a lower index.
+      prevPost:
+        index < sortedPosts.length - 1
+          ? {
+              id: sortedPosts[index + 1].id,
+              title: sortedPosts[index + 1].data.title,
+              filePath: sortedPosts[index + 1].filePath,
+            }
+          : null,
+      nextPost:
+        index > 0
+          ? {
+              id: sortedPosts[index - 1].id,
+              title: sortedPosts[index - 1].data.title,
+              filePath: sortedPosts[index - 1].filePath,
+            }
+          : null,
+    },
+  }));
+}
+
+type AdjacentPost = {
+  id: string;
+  title: string;
+  filePath: string | undefined;
+} | null;
+
+type Props = {
+  post: CollectionEntry<"posts">;
+  prevPost: AdjacentPost;
+  nextPost: AdjacentPost;
+};
+
+const { post, prevPost, nextPost } = Astro.props;
+const locale = Astro.currentLocale ?? config.site.lang;
+
+const {
+  title,
+  description,
+  ogImage: initOgImage,
+  canonicalURL,
+  pubDatetime,
+  modDatetime,
+  tags,
+  cover,
+} = post.data;
+
+const { Content } = await render(post);
+
+// The pencil note above the title: when it was written (and updated), and
+// how long it takes to read.
+const updated = modDatetime && modDatetime > pubDatetime;
+const kicker = [
+  dayjs(pubDatetime).format("D MMM YYYY"),
+  updated ? `updated ${dayjs(modDatetime).format("D MMM YYYY")}` : "",
+  `${readingTime(post.body)} min read`,
+]
+  .filter(Boolean)
+  .join(" · ");
+
+let ogImageUrl: string | undefined;
+
+if (typeof initOgImage === "string") {
+  ogImageUrl = initOgImage;
+} else if (initOgImage?.src) {
+  ogImageUrl = initOgImage.src;
+}
+
+if (!ogImageUrl && config.features.dynamicOgImage) {
+  const postUrl = getPostUrl(post.id, post.filePath, locale).replace(
+    /\/+$/,
+    ""
+  );
+  ogImageUrl = `${postUrl}/index.png`;
+}
+
+const ogImage = ogImageUrl
+  ? new URL(ogImageUrl, Astro.url.origin).href
+  : undefined;
+---
+
+<PostLayout
+  title={`${title} | ${config.site.title}`}
+  description={description}
+  ogImage={ogImage}
+  canonicalURL={canonicalURL}
+  pubDatetime={pubDatetime}
+  modDatetime={modDatetime}
+>
+  <Header />
+
+  <Notebook title={title} kicker={kicker} desc={description} post>
+    {
+      cover && (
+        <figure class="nb-cover">
+          <Image src={cover} alt={title} widths={[480, 800, 1100]} sizes="(min-width: 860px) 42rem, 90vw" loading="eager" />
+        </figure>
+      )
+    }
+
+    <article id="article" data-lightbox data-pagefind-body class="nb-prose">
+      <Content />
+    </article>
+
+    <footer class="nb-post-foot" data-pagefind-ignore>
+      {
+        tags.length > 0 && (
+          <ul class="nb-tags">
+            {tags.map(tag => (
+              <li>
+                <a class="nb-tag" href={`/tags/${slugifyStr(tag)}/`}>#{tag}</a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      <div class="nb-share"><ShareLinks /></div>
+    </footer>
+
+    <AdjacentPostNav {prevPost} {nextPost} />
+
+    <!-- Outside the paper, so they stay put while the page turns away. -->
+    <Fragment slot="after">
+      <BackToTopButton />
+      <ImageLightbox />
+    </Fragment>
+  </Notebook>
+  <Footer />
+</PostLayout>
+
+<script is:inline data-astro-rerun>
+  function createProgressBar() {
+    const progressContainer = document.createElement("div");
+    progressContainer.className =
+      "progress-container fixed top-0 z-10 h-1 w-full bg-background";
+
+    const progressBar = document.createElement("div");
+    progressBar.className = "progress-bar h-1 w-0 bg-accent";
+    progressBar.id = "myBar";
+
+    progressContainer.appendChild(progressBar);
+    document.body.appendChild(progressContainer);
+  }
+  createProgressBar();
+
+  function updateScrollProgress() {
+    document.addEventListener("scroll", () => {
+      const winScroll =
+        document.body.scrollTop || document.documentElement.scrollTop;
+      const height =
+        document.documentElement.scrollHeight -
+        document.documentElement.clientHeight;
+      const scrolled = (winScroll / height) * 100;
+      if (document) {
+        const myBar = document.getElementById("myBar");
+        if (myBar) {
+          myBar.style.width = scrolled + "%";
+        }
+      }
+    });
+  }
+  updateScrollProgress();
+
+  function addHeadingLinks() {
+    const headings = Array.from(
+      document.querySelectorAll("h2, h3, h4, h5, h6")
+    );
+    for (const heading of headings) {
+      heading.classList.add("group");
+      const link = document.createElement("a");
+      link.className =
+        "heading-link ms-2 no-underline opacity-75 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100";
+      link.href = "#" + heading.id;
+
+      const span = document.createElement("span");
+      span.ariaHidden = "true";
+      span.innerText = "#";
+      link.appendChild(span);
+      heading.appendChild(link);
+    }
+  }
+  addHeadingLinks();
+
+  function attachCopyButtons() {
+    const copyButtonLabel = "Copy";
+    const codeBlocks = Array.from(document.querySelectorAll("pre"));
+
+    for (const codeBlock of codeBlocks) {
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+
+      const computedStyle = getComputedStyle(codeBlock);
+      const hasFileNameOffset =
+        computedStyle.getPropertyValue("--file-name-offset").trim() !== "";
+
+      const topClass = hasFileNameOffset
+        ? "top-(--file-name-offset)"
+        : "-top-3";
+
+      const copyButton = document.createElement("button");
+      copyButton.className = `copy-code absolute end-3 ${topClass} rounded bg-muted border border-muted px-2 py-1 text-xs leading-4 text-foreground font-medium`;
+      copyButton.innerHTML = copyButtonLabel;
+      codeBlock.setAttribute("tabindex", "0");
+      codeBlock.appendChild(copyButton);
+
+      codeBlock?.parentNode?.insertBefore(wrapper, codeBlock);
+      wrapper.appendChild(codeBlock);
+
+      copyButton.addEventListener("click", async () => {
+        await copyCode(codeBlock, copyButton);
+      });
+    }
+
+    async function copyCode(block, button) {
+      const code = block.querySelector("code");
+      const text = code?.innerText;
+
+      await navigator.clipboard.writeText(text ?? "");
+
+      button.innerText = "Copied";
+
+      setTimeout(() => {
+        button.innerText = copyButtonLabel;
+      }, 700);
+    }
+  }
+  attachCopyButtons();
+
+  document.addEventListener("astro:after-swap", () =>
+    window.scrollTo({ left: 0, top: 0, behavior: "instant" })
+  );
+</script>
+
+<style is:global>
+  /* Reading progress: a thin amber line across the top (the site's lamp
+     colour), not the template's bar. */
+  .progress-container {
+    height: 3px !important;
+    background: transparent !important;
+  }
+  .progress-bar {
+    height: 3px !important;
+    background: #ffd27a !important;
+  }
+
+  /* The cover photo, taped onto the page. */
+  .nb-cover {
+    position: relative;
+    margin: 0 0 2.25rem;
+    padding: 0.6rem 0.6rem 2rem;
+    background: #fff;
+    box-shadow: 4px 5px 0 rgb(43 39 36 / 0.18);
+    transform: rotate(-1deg);
+  }
+  .nb-cover img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .nb-cover::before,
+  .nb-cover::after {
+    content: "";
+    position: absolute;
+    top: -0.6rem;
+    width: 5.5rem;
+    height: 1.2rem;
+    background: rgb(240 230 190 / 0.75);
+  }
+  .nb-cover::before {
+    left: 1.5rem;
+    transform: rotate(-6deg);
+  }
+  .nb-cover::after {
+    right: 1.5rem;
+    transform: rotate(5deg);
+  }
+
+  /* The entry itself: ink on ruled paper, sized for reading. */
+  .nb-prose {
+    color: #2b2724;
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: clamp(1.05rem, 1.1vw, 1.15rem);
+    line-height: 1.75;
+  }
+  .nb-prose > :first-child {
+    margin-top: 0;
+  }
+  .nb-prose p,
+  .nb-prose ul,
+  .nb-prose ol {
+    margin: 0 0 1.35em;
+  }
+  .nb-prose ul,
+  .nb-prose ol {
+    padding-left: 1.3em;
+  }
+  .nb-prose ul {
+    list-style: disc;
+  }
+  .nb-prose ol {
+    list-style: decimal;
+  }
+  .nb-prose li::marker {
+    color: #6b655d;
+  }
+  /* Checklists: the checkbox is the bullet. */
+  .nb-prose li:has(> input[type="checkbox"]) {
+    list-style: none;
+    margin-left: -1.3em;
+  }
+  .nb-prose li > input[type="checkbox"] {
+    margin-right: 0.5em;
+    accent-color: #2b2724;
+  }
+  .nb-prose h2,
+  .nb-prose h3 {
+    margin: 2.5rem 0 0.8rem;
+    color: #2b2724;
+    font-family: var(--font-pixel), monospace;
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.25;
+    scroll-margin-top: 2rem;
+  }
+  .nb-prose h2 {
+    font-size: 1.5rem;
+  }
+  .nb-prose h3 {
+    font-size: 1.2rem;
+  }
+  .nb-prose .heading-link {
+    color: #6b655d;
+    text-decoration: none;
+  }
+  .nb-prose strong {
+    color: #000;
+    font-weight: 600;
+  }
+  /* Links: pencil-blue, underlined like a hand-drawn line. */
+  .nb-prose a {
+    color: #2a4f8f !important;
+    text-decoration: underline;
+    text-decoration-color: rgb(42 79 143 / 0.45);
+    text-underline-offset: 4px;
+  }
+  .nb-prose a:hover {
+    background: rgb(255 205 100 / 0.5);
+    text-decoration-color: currentColor;
+  }
+  /* Quotes: set off by a pencil line, in italics. */
+  .nb-prose blockquote {
+    margin: 0 0 2rem;
+    padding: 0 0 0 1.2rem;
+    border-left: 3px solid rgb(107 101 93 / 0.5);
+    color: #4d4741;
+    font-size: 1.15em;
+    font-style: italic;
+    line-height: 1.6;
+  }
+  .nb-prose blockquote p {
+    margin: 0;
+  }
+  .nb-prose hr {
+    margin: 2rem 0;
+    border: 0;
+    border-top: 2px dashed rgb(107 101 93 / 0.4);
+  }
+  /* Photos in an entry: taped on, slightly askew. */
+  .nb-prose img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 2rem auto;
+    padding: 0.5rem 0.5rem 1.6rem;
+    background: #fff;
+    box-shadow: 4px 5px 0 rgb(43 39 36 / 0.18);
+    transform: rotate(-0.6deg);
+  }
+  .nb-prose code:not(pre code) {
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    background: rgb(43 39 36 / 0.08);
+    font-size: 0.9em;
+  }
+  .nb-prose pre {
+    margin: 0 0 2rem;
+    padding: 1rem 1.2rem;
+    border-radius: 4px;
+    line-height: 1.6;
+    overflow-x: auto;
+    box-shadow: 4px 4px 0 rgb(43 39 36 / 0.25);
+  }
+  /* Tables: a proper grid, drawn in ink on a card pinned over the ruled
+     lines, with a highlighted header row. Scrolls sideways on its own if
+     it's wider than a phone. */
+  .nb-prose table {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 0 2rem;
+    overflow-x: auto;
+    border: 2px solid #2b2724;
+    border-collapse: collapse;
+    background: #fbf8ee;
+    box-shadow: 4px 4px 0 rgb(43 39 36 / 0.18);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .nb-prose th,
+  .nb-prose td {
+    padding: 0.55rem 1rem;
+    border: 1px solid rgb(43 39 36 / 0.3);
+    text-align: left;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+  .nb-prose td {
+    white-space: normal;
+    min-width: 7rem;
+  }
+  .nb-prose th {
+    background: rgb(255 205 100 / 0.55);
+    border-bottom: 2px solid #2b2724;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.82rem;
+    font-variant-ligatures: none;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .nb-prose tbody tr:nth-child(even) td {
+    background: rgb(43 39 36 / 0.035);
+  }
+
+  /* Under the entry: its tags, and sharing. */
+  .nb-post-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px dashed rgb(107 101 93 / 0.4);
+  }
+  .nb-share {
+    color: #6b655d;
+  }
+  .nb-share a {
+    color: #2b2724 !important;
+  }
+  .nb-share svg {
+    stroke: #2b2724;
+  }
+</style>

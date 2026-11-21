@@ -1,0 +1,212 @@
+---
+import { getCollection } from "astro:content";
+import { Image } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import CmdWindow from "@/components/coding/CmdWindow.astro";
+import CmdStep from "@/components/coding/CmdStep.astro";
+import { cmdColor } from "@/components/coding/cmdColors";
+import { taglinePlain } from "@/utils/formatTagline";
+import config from "@/config";
+
+const entries = (await getCollection("coding")).sort(
+  (a, b) => a.data.order - b.data.order
+);
+
+const CWD = "C:\\bgokul\\portfolio\\coding";
+
+const shellEntries = entries.map(e => ({
+  name: e.data.title,
+  href: `/portfolio/coding/${e.id}`,
+  dir: true,
+}));
+---
+
+<Layout
+  title={`Coding | ${config.site.title}`}
+  description="Experiments, prototypes, and things I coded along the way."
+>
+  <CmdWindow
+    crumbs={[
+      { label: "C:", href: "/" },
+      { label: "portfolio", href: "/portfolio" },
+      { label: "coding" },
+    ]}
+    cwd={CWD}
+    parentHref="/portfolio"
+    entries={shellEntries}
+  >
+    <div class="cmd-banner" data-cmd-clearable>
+      <p class="cmd-dim">bgokul.com [Version 2026.11]</p>
+      <p class="cmd-dim">(c) {config.site.author}. All rights reserved.</p>
+    </div>
+
+    <CmdStep prompt={CWD} cmd="dir">
+      <h1 class="sr-only">Coding</h1>
+      <p class="cmd-dim">&nbsp;Directory of {CWD}</p>
+      <ul class="dir-list">
+        <li class="dir-row dir-up">
+          <span class="dir-type">&lt;DIR&gt;</span>
+          <a href="/portfolio" class="dir-name">..</a>
+        </li>
+        {
+          entries.map(({ id, data }, i) => (
+            <li
+              class="dir-row dir-entry"
+              style={data.color ? `--row-hl: ${cmdColor(data.color)}` : undefined}
+            >
+              <span class="dir-type">&lt;DIR&gt;</span>
+              <div class="dir-body">
+                {i < 9 && <span class="dir-key" aria-hidden="true">{i + 1}</span>}
+                <a href={`/portfolio/coding/${id}`} class="dir-name">
+                  {data.title}
+                </a>
+                {data.kind && <span class="cmd-dim dir-kind">{data.kind}</span>}
+                {data.tagline && (
+                  <p class="dir-desc">{taglinePlain(data.tagline)}</p>
+                )}
+              </div>
+              {data.cover && (
+                <Image
+                  src={data.cover}
+                  alt=""
+                  width={320}
+                  height={180}
+                  loading="lazy"
+                  class="dir-thumb"
+                />
+              )}
+            </li>
+          ))
+        }
+      </ul>
+      <p class="dir-summary cmd-dim">
+        {entries.length} Dir(s)&nbsp;&nbsp;&nbsp;more on the way
+      </p>
+    </CmdStep>
+
+    <CmdStep prompt={CWD} cmd="echo Click a folder, or press its number.">
+      <p>Click a folder, or press its number.</p>
+    </CmdStep>
+  </CmdWindow>
+</Layout>
+
+<style>
+  .dir-list {
+    margin: 0.75em 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .dir-row {
+    --row-hl: var(--cmd-bright);
+    position: relative;
+    display: grid;
+    grid-template-columns: 7ch minmax(0, 1fr);
+    padding: 0.4em 0.75ch;
+    margin: 0 -0.75ch;
+  }
+  .dir-type {
+    color: var(--cmd-dim);
+  }
+  .dir-entry {
+    padding-block: 0.75em;
+  }
+  .dir-entry + .dir-entry {
+    border-top: 1px dashed var(--cmd-faint);
+  }
+
+  .dir-name {
+    color: var(--row-hl) !important;
+    text-decoration: none !important;
+  }
+  /* The whole row is the click target, not just the name. */
+  .dir-entry .dir-name::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  .dir-entry:hover,
+  .dir-entry:focus-within {
+    background: color-mix(in srgb, var(--row-hl) 9%, transparent);
+  }
+  .dir-entry:hover .dir-name,
+  .dir-entry:focus-within .dir-name {
+    text-decoration: underline !important;
+    text-underline-offset: 3px;
+  }
+  .dir-entry .dir-name:focus-visible {
+    outline: none;
+  }
+  .dir-entry:has(.dir-name:focus-visible) {
+    outline: 1px dashed var(--row-hl);
+  }
+
+  /* The folder's number key: a small inverted block, DOS-menu style. It
+     takes the project's colour on hover. */
+  .dir-key {
+    display: inline-block;
+    margin-right: 1ch;
+    padding: 0 0.6ch;
+    background: var(--cmd-faint);
+    color: var(--cmd-bright);
+  }
+  .dir-entry:hover .dir-key,
+  .dir-entry:focus-within .dir-key {
+    background: var(--row-hl);
+    color: var(--cmd-bg);
+  }
+  .dir-kind {
+    margin-left: 1.5ch;
+    font-size: 0.875em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .dir-desc {
+    max-width: 60ch;
+    margin-top: 0.15em !important;
+    color: var(--cmd-fg);
+  }
+  .dir-up .dir-name {
+    color: var(--cmd-fg) !important;
+  }
+  .dir-up .dir-name:hover {
+    text-decoration: underline !important;
+  }
+  .dir-summary {
+    margin-top: 0.75em !important;
+    padding-left: 7ch;
+  }
+
+  /* Hover preview: wide screens with a mouse only. */
+  .dir-thumb {
+    display: none;
+  }
+  @media (hover: hover) and (min-width: 1100px) {
+    .dir-thumb {
+      display: block;
+      position: absolute;
+      top: 50%;
+      right: 1ch;
+      width: 240px;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border: 1px solid var(--row-hl);
+      opacity: 0;
+      transform: translateY(-50%) translateX(6px);
+      transition:
+        opacity 0.15s,
+        transform 0.15s;
+      pointer-events: none;
+    }
+    .dir-entry:hover .dir-thumb,
+    .dir-entry:focus-within .dir-thumb {
+      opacity: 1;
+      transform: translateY(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dir-thumb {
+      transition: none;
+    }
+  }
+</style>

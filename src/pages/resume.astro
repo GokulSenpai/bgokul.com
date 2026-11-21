@@ -1,0 +1,1092 @@
+---
+/**
+ * Resume as patch notes. Each job is a release, newest first: a big version
+ * number, the studio in its logo colour, and tagged notes (NEW, TUNED...).
+ * Skills are the "system requirements". Plain HTML, no script: it reads
+ * the same on a phone, in a search engine and on paper.
+ */
+import { Font } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
+import config from "@/config";
+
+// The PDF lives in Google Drive. To update it, replace the file in Drive
+// (keeping the same share link) or paste a new file id here.
+const DRIVE_FILE_ID = "1IMn1_Tf4NLEfyEQ-ALgu7yjJ9Hpcaq4j";
+const driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${DRIVE_FILE_ID}`;
+const driveViewUrl = `https://drive.google.com/file/d/${DRIVE_FILE_ID}/view`;
+
+const linkedin = config.socials.find(s => s.name === "linkedin")?.url;
+const mail = config.socials.find(s => s.name === "mail")?.url;
+
+type Tag = "new" | "tuned" | "improved" | "result" | "award";
+type Release = {
+  id: string;
+  version: string;
+  /** Short name for the version index. */
+  short: string;
+  live?: boolean;
+  role: string;
+  place: string;
+  /** Company website; the name links here instead of using their logo. */
+  url?: string;
+  /** Sampled from the company's logo (PlaySimple is white). */
+  brand: string;
+  dates: string;
+  /** Games in this build: a name, or [name, store link]. */
+  titles?: (string | [string, string])[];
+  /** Note text may hold a simple <a> link. */
+  notes: [Tag, string][];
+};
+
+const releases: Release[] = [
+  {
+    id: "ea",
+    version: "4.0",
+    short: "EA",
+    live: true,
+    role: "Game Designer",
+    place: "Electronic Arts",
+    url: "https://www.ea.com",
+    brand: "#2459f7",
+    dates: "May 2024 – now",
+    titles: [
+      ["Madden NFL", "https://play.google.com/store/apps/details?id=com.ea.gp.maddennfl21mobile&hl=en_US"],
+      ["College Football", "https://play.google.com/store/apps/details?id=com.ea.gp.collegefbmobile&hl=en_US"],
+      ["Need for Speed", "https://play.google.com/store/apps/details?id=com.ea.game.nfs14_row&hl=en_US"],
+      // NBA Live and NBA Next are the same app. Its store page
+      // (com.ea.gp.nbamobile) only opens for people who already have the
+      // app; anyone else gets "Not found" (checked Nov 2026), so no link.
+      // Its installs (100M+) still count in the downloads figure.
+      "NBA Live",
+      "NBA Next",
+    ],
+    notes: [
+      ["new", "Designed and ran live events across NBA, Madden, NFS, and College Football."],
+      ["new", "Owned a live game mode from setup to launch, and trained the team to run it."],
+      ["new", "Made event templates and features that players praised in community feedback. The NBA Love Promo was mine."],
+      ["tuned", "Tested ideas with paper and Unity prototypes before they went into production."],
+      ["improved", "Built templates and guides that cut the team's documentation and build time by about half."],
+      ["improved", "Ramped up quickly on each new title, mentored a new designer, and never missed a deadline."],
+      ["award", `Won People's Choice at our studio's first game jam with <a href="/portfolio/design/project-reboot">Project Reboot</a>.`],
+    ],
+  },
+  {
+    id: "playsimple",
+    version: "3.0",
+    short: "PlaySimple",
+    role: "Jr. Game Designer",
+    place: "PlaySimple Games",
+    url: "https://www.playsimple.in",
+    brand: "#ffffff",
+    dates: "Oct 2022 – Mar 2023",
+    titles: [["Jigsaw", "https://play.google.com/store/apps/details?id=in.playsimple.jigsaw_puzzle&hl=en"]],
+    notes: [
+      ["new", "Designed the Story Event, a hit for retention and engagement that other games in the studio wanted to copy."],
+      ["new", "Designed the first-time user flow, progression and puzzle-piece sorting."],
+      ["tuned", "Tuned the sorting with paper prototypes and in-person playtests."],
+      ["new", "Shipped one large or two small features a week, backed by market research and content analysis."],
+    ],
+  },
+  {
+    id: "byjus",
+    version: "2.0",
+    short: "BYJU'S",
+    role: "Game Designer",
+    place: "BYJU'S",
+    url: "https://byjus.com",
+    brand: "#813589",
+    dates: "Oct 2021 – Oct 2022",
+    titles: [["BYJU'S – The Learning App", "https://play.google.com/store/apps/details?id=com.byjus.thelearningapp&hl=en_IN&gl=US"]],
+    notes: [
+      ["new", "Designed 50+ learning games for children in 2D, 3D and VR, working on two or three storyboards a week."],
+      ["result", "Achieved completion above 70% across 200+ experiences."],
+      ["improved", "Built templates for producing games at scale. Took each game from its learning objective through the design doc, vendor art reviews and playtesting."],
+    ],
+  },
+  {
+    id: "gamitronics",
+    version: "1.0",
+    short: "Gamitronics",
+    role: "Gameplay Programmer Intern",
+    place: "Gamitronics",
+    url: "https://www.gamitronics.com",
+    brand: "#ffa743",
+    dates: "Jul 2020 – Jan 2021",
+    titles: [
+      ["Chhota Bheem", "https://apps.apple.com/us/app/play-with-mighty-little-bheem/id1543145665"],
+      // Not on the stores any more.
+      "Servo Drive",
+    ],
+    notes: [
+      ["new", "Built games for clients on several platforms."],
+      ["improved", "Maintained a shipped title and added a new in-game event to it."],
+    ],
+  },
+  {
+    id: "university",
+    version: "0.1",
+    short: "University",
+    role: "Bachelor of Technology, Computer Science",
+    place: "Jawaharlal Nehru Fine Arts University",
+    brand: "#a3a3a3",
+    dates: "2017 – 2021",
+    notes: [["result", "Graduated with a CGPA of 9.0."]],
+  },
+];
+
+// System requirements, in the order given.
+const requirements = [
+  {
+    label: "Design",
+    items: [
+      "Paper prototyping",
+      "Playtesting",
+      "Breakdowns",
+      "Googling",
+      "Design docs",
+      "Onboarding (FTUE)",
+      "Systems & progression",
+      "Live ops",
+      "Economy & rewards",
+      "Narrative design",
+    ],
+  },
+  {
+    label: "Build",
+    items: ["Godot", "Unity", "C#", "XML", "Git", "Spreadsheets", "Figma", "Photoshop", "FL Studio"],
+  },
+  { label: "Languages", items: ["English", "Hindi", "Telugu"] },
+];
+
+---
+
+<Layout
+  title={`Resume | ${config.site.title}`}
+  description="Gokul is a game designer at Electronic Arts working on live events for NBA, Madden, Need for Speed and College Football."
+>
+  <Fragment slot="head">
+    <Font
+      cssVariable="--font-console"
+      preload={[{ subset: "latin", weight: 400, style: "normal" }]}
+    />
+  </Fragment>
+
+  <Header wide />
+
+  <main id="main-content" class="notes-page">
+    <!-- Masthead -->
+    <header class="mast">
+      <p class="kicker">
+        <span class="live-dot" aria-hidden="true"></span>
+        Patch notes <span class="sep">/</span> build 4.0 is live
+      </p>
+      <h1>Gokul Naga Sai</h1>
+      <p class="role">Game Designer at <a href="https://www.ea.com" target="_blank" rel="noopener noreferrer">Electronic Arts</a></p>
+      <p class="bio">
+        When I'm not designing games, I write stories and build worlds. I also
+        read, explore on my motorcycle, and try more new things than I have
+        time for.
+      </p>
+      <div class="actions">
+        <a href={driveDownloadUrl} class="download">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" /></svg>
+          Download PDF
+        </a>
+        {mail && <a href={mail} class="text-link">Email</a>}
+        {linkedin && <a href={linkedin} class="text-link" target="_blank" rel="noopener noreferrer">LinkedIn</a>}
+      </div>
+      <dl class="figures">
+        <div><dt>years making games</dt><dd>6</dd></div>
+        <div><dt>EA titles</dt><dd>5</dd></div>
+        <div><dt>games designed</dt><dd>50+</dd></div>
+        {/* Google Play install badges, read Nov 2026 (lower bounds):
+            NBA Live Mobile 100M+ (seen signed in; the page is hidden from
+            anyone without the app), NFS No Limits 100M+, BYJU'S 100M+,
+            Madden NFL Mobile 10M+, Jigsaw Puzzle Explorer 5M+, EA College
+            Football Mobile 100K+. Chhota Bheem (App Store, no counts) isn't
+            included. Reach, not authorship: the label says "games I've
+            worked on". */}
+        <div><dt>downloads across games I've worked on</dt><dd>315M+</dd></div>
+      </dl>
+    </header>
+
+    <!-- Version index: stays at the top while you read, and lights up the
+         release you're on. ← / → jump between releases. -->
+    <nav class="index" aria-label="Releases" data-index>
+      {releases.map(r => (
+        <a href={`#${r.id}`} style={`--brand: ${r.brand}`} data-rel={r.id}>
+          <span class="v">{r.version}</span> {r.short}
+        </a>
+      ))}
+      <span class="index-keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> Releases</span>
+    </nav>
+
+    <!-- Releases, newest first -->
+    <ol class="releases">
+      {releases.map(r => (
+        <li id={r.id} class="release" style={`--brand: ${r.brand}`}>
+          <div class="ver">
+            <span class="num" aria-hidden="true">{r.version}</span>
+            <span class="sr-only">Version {r.version}</span>
+            <span class="when">{r.dates}</span>
+            {r.live && <span class="live">Live</span>}
+          </div>
+          <div class="body">
+            <h2>
+              {r.url ? (
+                <a href={r.url} class="studio" target="_blank" rel="noopener noreferrer">{r.place}</a>
+              ) : (
+                <span class="studio">{r.place}</span>
+              )}
+              <span class="title">{r.role}</span>
+            </h2>
+            {r.titles && (
+              <p class="in-build">
+                <span class="in-label">In this build</span>
+                {r.titles.map((t, i) => (
+                  <>
+                    {i > 0 && <span class="dot-sep" aria-hidden="true"> · </span>}
+                    {typeof t === "string" ? (
+                      <span class="nowrap">{t}</span>
+                    ) : (
+                      <a href={t[1]} class="nowrap app" target="_blank" rel="noopener noreferrer">
+                        {t[0]}<span class="app-arrow" aria-hidden="true">↗</span>
+                        <span class="sr-only"> (store page, opens in a new tab)</span>
+                      </a>
+                    )}
+                  </>
+                ))}
+              </p>
+            )}
+            <ul class="changes">
+              {r.notes.map(([tag, text]) => (
+                <li class={`t-${tag}`}>
+                  <span class="tag">{tag}</span>
+                  <span class="text" set:html={text} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </li>
+      ))}
+    </ol>
+
+    <!-- Skills as system requirements -->
+    <section class="reqs" aria-labelledby="reqs">
+      <h2 id="reqs" class="section-title">System requirements</h2>
+      <dl>
+        {requirements.map(r => (
+          <div class="req">
+            <dt>{r.label} <span class="req-count">{r.items.length}</span></dt>
+            <dd>
+              <ul class="req-items">
+                {r.items.map(i => <li>{i}</li>)}
+              </ul>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <p class="pdf-note">
+      Prefer paper? <a href={driveViewUrl} target="_blank" rel="noopener noreferrer">Open the PDF in Google Drive</a>
+    </p>
+
+    <!-- Off to the games -->
+    <a href="/portfolio/design" class="play" data-play>
+      <span class="play-main">
+        Play my games
+        <span class="play-arrow" aria-hidden="true">→</span>
+      </span>
+    </a>
+    <p class="after-play">
+      Or <a href="/contact" data-fade>say hi</a>, and see <a href="/portfolio" data-fade>everything else I make</a>.
+    </p>
+
+    <BackToTopButton />
+  </main>
+
+  <script>
+    import { navigate } from "astro:transitions/client";
+    import { achievement, progressSaved } from "@/components/home/bootSound";
+    import { soundOn } from "@/scripts/cameFrom";
+    import { unlock } from "@/scripts/achievements";
+
+    let ctrl: AbortController | null = null;
+
+    function init() {
+      const page = document.querySelector<HTMLElement>(".notes-page");
+      if (!page || page.dataset.ready) return;
+      page.dataset.ready = "1";
+      ctrl?.abort();
+      ctrl = new AbortController();
+      const { signal } = ctrl;
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const timers: number[] = [];
+      signal.addEventListener("abort", () => timers.forEach(clearTimeout));
+
+      // Arriving: the patch is installed (the page builds in, in CSS). The
+      // first time, that's an achievement (its toast plays the sound);
+      // after that, just the sound, as the page's arrival chime.
+      timers.push(window.setTimeout(() => {
+        if (!unlock("patch-notes") && soundOn()) achievement();
+      }, reduce ? 0 : 350));
+
+      // Leaving (◀ Main menu or Esc): progress saved, and the page settles
+      // away as it fades (CSS, on html.sys-leaving).
+      document.addEventListener("sys:leaving", () => soundOn() && progressSaved(), { signal });
+
+      // "Play my games": the same fade as every other exit.
+      page.querySelector<HTMLAnchorElement>("[data-play]")?.addEventListener(
+        "click",
+        e => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          const href = (e.currentTarget as HTMLAnchorElement).href;
+          if (soundOn()) progressSaved();
+          if (reduce) return void navigate(href);
+          document.documentElement.classList.add("sys-leaving");
+          setTimeout(() => navigate(href), 380);
+        },
+        { signal }
+      );
+
+      // The version index: light up the release being read; ← / → jump
+      // to the previous / next release.
+      const links = [...page.querySelectorAll<HTMLAnchorElement>("[data-rel]")];
+      const rels = links.map(a => document.getElementById(a.dataset.rel!)!).filter(Boolean);
+      let cur = -1;
+      const mark = () => {
+        const line = window.innerHeight * 0.35;
+        let i = -1;
+        rels.forEach((r, k) => {
+          if (r.getBoundingClientRect().top <= line) i = k;
+        });
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) i = rels.length - 1;
+        if (i === cur) return;
+        cur = i;
+        links.forEach((a, k) => a.classList.toggle("is-current", k === cur));
+      };
+      mark();
+      window.addEventListener("scroll", mark, { signal, passive: true });
+      const jump = (i: number) => {
+        const r = rels[Math.max(0, Math.min(rels.length - 1, i))];
+        r?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      };
+      document.addEventListener(
+        "keydown",
+        e => {
+          if (e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+          if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+          if (e.key === "ArrowRight") {
+            e.preventDefault();
+            jump(cur + 1);
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            jump(cur <= 0 ? 0 : cur - 1);
+          }
+        },
+        { signal }
+      );
+
+      document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+    }
+    document.addEventListener("astro:page-load", init);
+  </script>
+
+  <Footer />
+</Layout>
+
+<style>
+  .notes-page {
+    /* The main menu's night palette and pixel font: an in-game patch-notes
+       screen. Labels, tags and headings are pixel type; the notes
+       themselves stay in a clean sans for reading. */
+    --ink: #efecdc;
+    --muted: rgb(239 236 220 / 0.6);
+    --faint: rgb(154 160 214 / 0.18);
+    --mono: var(--font-pixel), ui-monospace, monospace;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+    font-variant-ligatures: none;
+    /* Same column as <Header wide> (max-w-6xl, px-4) so the edges line up. */
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 7vh, 5rem) 1rem 3rem;
+    font-family: var(--font-console), system-ui, sans-serif;
+    color: var(--ink);
+  }
+  .notes-page a {
+    color: inherit;
+  }
+
+  /* Masthead */
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .sep {
+    opacity: 0.4;
+  }
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 0 0 rgb(74 222 128 / 0.6);
+    animation: ping 2s ease-out infinite;
+  }
+  @keyframes ping {
+    70%,
+    100% {
+      box-shadow: 0 0 0 8px rgb(74 222 128 / 0);
+    }
+  }
+  h1 {
+    margin: 0.9rem 0 0;
+    font-family: var(--mono);
+    font-size: clamp(2.4rem, 7.5vw, 5.4rem);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    text-shadow: var(--hard);
+  }
+  .role {
+    margin: 0.8rem 0 0;
+    font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+    font-weight: 300;
+    color: var(--muted);
+  }
+  .role a {
+    color: #fff;
+    font-weight: 500;
+    text-decoration: none;
+    border-bottom: 2px solid #2459f7;
+  }
+  .bio {
+    max-width: 36rem;
+    margin: 1.4rem 0 0;
+    color: rgb(255 255 255 / 0.75);
+    font-size: 1.02rem;
+    line-height: 1.7;
+    /* Even line lengths, so the last line never ends on a stray word. */
+    text-wrap: balance;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.6rem;
+    margin-top: 1.8rem;
+  }
+  /* The main action: the site's amber pixel button (like "Press start"
+     on the game pages), not a plain white one. */
+  .download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 48px;
+    padding: 0 1.4rem;
+    border: 2px solid #ffd27a;
+    border-radius: 3px;
+    background: #ffd27a;
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.85);
+    color: #07081a !important;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
+  }
+  .download:hover,
+  .download:focus-visible {
+    outline: none;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 rgb(3 4 14 / 0.85);
+  }
+  .download:focus-visible {
+    border-color: #efecdc;
+  }
+  .download svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .text-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: underline;
+    text-decoration-color: rgb(255 255 255 / 0.3);
+    text-underline-offset: 5px;
+  }
+  .text-link:hover {
+    text-decoration-color: currentColor;
+  }
+  .figures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem clamp(1.5rem, 5vw, 3.5rem);
+    margin: 2.4rem 0 0;
+  }
+  .figures div {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .figures dd {
+    order: -1;
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 300;
+  }
+  .figures dt {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  /* Version index */
+  /* The version index stays at the top as you read (like the contents on
+     the game pages), with the release you're on lit in its colour. */
+  .index {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem 1.6rem;
+    flex-wrap: wrap;
+    margin: clamp(2.5rem, 7vh, 4rem) 0 0;
+    padding: 0.9rem 0;
+    border-block: 1px solid var(--faint);
+    background: rgb(11 13 36 / 0.92);
+    backdrop-filter: blur(6px);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  /* Edge to edge behind the bar (the page column is narrower): a shadow,
+     clipped to the bar's height, which never makes the page scroll
+     sideways. */
+  .index {
+    box-shadow: 0 0 0 100vmax rgb(11 13 36 / 0.92);
+    clip-path: inset(0 -100vmax);
+  }
+  .index a {
+    position: relative;
+    display: inline-flex;
+    gap: 0.45rem;
+    padding: 0.35rem 0;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .index a:hover,
+  .index a:focus-visible {
+    color: #fff;
+  }
+  .index a.is-current {
+    color: #fff;
+  }
+  .index a.is-current::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.55rem;
+    height: 3px;
+    background: color-mix(in srgb, var(--brand) 70%, white);
+  }
+  .index-keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+  .index-keys kbd {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.6rem;
+    height: 1.35rem;
+    border: 2px solid rgb(154 160 214 / 0.5);
+    border-bottom-width: 3px;
+    border-radius: 3px;
+    color: #efecdc;
+    font-family: inherit;
+    font-size: 0.65rem;
+  }
+  @media (hover: none) {
+    .index-keys {
+      display: none;
+    }
+  }
+  .index .v {
+    color: color-mix(in srgb, var(--brand) 60%, white);
+  }
+
+  /* Releases */
+  .releases {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .release {
+    display: grid;
+    grid-template-columns: minmax(150px, 15rem) 1fr;
+    gap: clamp(1rem, 4vw, 3rem);
+    padding: clamp(2.2rem, 6vh, 3.5rem) 0;
+    border-bottom: 1px solid var(--faint);
+    /* Clear of the sticky version index when jumped to. */
+    scroll-margin-top: 4.5rem;
+  }
+  .ver {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+  /* Version numbers: big pixel digits in the studio's colour. The live
+     build is bright; older builds are dimmer, like greyed-out saves. */
+  .num {
+    font-family: var(--mono);
+    font-size: clamp(3.2rem, 8vw, 5.6rem);
+    font-weight: 600;
+    line-height: 0.9;
+    color: color-mix(in srgb, var(--brand) 70%, white);
+    opacity: 0.55;
+    text-shadow: 0.06em 0.06em 0 rgb(5 6 20 / 0.9);
+  }
+  .release:first-child .num {
+    opacity: 1;
+  }
+  .when {
+    margin-top: 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .live {
+    padding: 0.1rem 0.45rem;
+    border: 1px solid rgb(74 222 128 / 0.5);
+    color: #4ade80;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    /* On air: a gentle, slow breathe (not a hard blink). */
+    animation: live-breathe 2.4s ease-in-out infinite;
+  }
+  @keyframes live-breathe {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 0 0 rgb(74 222 128 / 0);
+    }
+    50% {
+      opacity: 0.45;
+      box-shadow: 0 0 8px 0 rgb(74 222 128 / 0.25);
+    }
+  }
+  .body h2 {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0;
+  }
+  .studio {
+    width: fit-content;
+    font-family: var(--mono);
+    font-size: clamp(1.4rem, 2.8vw, 1.95rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    text-shadow: var(--hard);
+    color: color-mix(in srgb, var(--brand) 78%, white) !important;
+    text-decoration: none;
+  }
+  a.studio:hover,
+  a.studio:focus-visible {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 6px;
+  }
+  .title {
+    font-size: 1.05rem;
+    font-weight: 400;
+    color: rgb(255 255 255 / 0.8);
+  }
+  .in-build {
+    margin: 1rem 0 0;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: rgb(255 255 255 / 0.8);
+  }
+  .nowrap {
+    white-space: nowrap;
+  }
+  /* A game with a store page: dashed underline and a small ↗, lit in the
+     studio's colour on hover. */
+  .in-build .app {
+    text-decoration: underline dashed rgb(255 255 255 / 0.3);
+    text-underline-offset: 4px;
+    transition:
+      color 0.15s,
+      text-decoration-color 0.15s;
+  }
+  /* inline-block: the link's dashed underline stays under the name, not
+     the arrow. */
+  .app-arrow {
+    display: inline-block;
+    margin-left: 0.2em;
+    font-size: 0.85em;
+    opacity: 0.55;
+  }
+  .in-build .app:hover,
+  .in-build .app:focus-visible {
+    outline: none;
+    color: color-mix(in srgb, var(--brand) 55%, white);
+    text-decoration-color: currentColor;
+  }
+  .in-build .app:hover .app-arrow,
+  .in-build .app:focus-visible .app-arrow {
+    opacity: 1;
+  }
+  .dot-sep {
+    margin: 0 0.35rem;
+    color: var(--muted);
+  }
+  .in-label {
+    margin-right: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .changes {
+    margin: 1.3rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .changes li {
+    display: grid;
+    grid-template-columns: 6.2rem 1fr;
+    gap: 0.9rem;
+    padding: 0.6rem 0;
+    border-top: 1px dashed var(--faint);
+  }
+  .changes li:first-child {
+    border-top: 0;
+  }
+  .tag {
+    align-self: start;
+    margin-top: 0.22rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--c);
+  }
+  .tag::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 0.45rem;
+    background: var(--c);
+    vertical-align: 0.05em;
+  }
+  .t-new { --c: #4ade80; }
+  .t-improved { --c: #60a5fa; }
+  .t-tuned { --c: #fbbf24; }
+  .t-result { --c: #c4b5fd; }
+  .t-award { --c: #f5c542; }
+  .text {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: rgb(255 255 255 / 0.88);
+    text-wrap: pretty;
+  }
+  .text :global(a) {
+    color: #fff;
+    text-decoration: underline;
+    text-decoration-color: var(--c);
+    text-underline-offset: 3px;
+  }
+
+  /* System requirements */
+  .section-title {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .reqs {
+    margin-top: clamp(3rem, 8vh, 4.5rem);
+  }
+  .reqs dl {
+    margin: 1.2rem 0 0;
+  }
+  .req {
+    display: grid;
+    grid-template-columns: minmax(150px, 15rem) 1fr;
+    gap: clamp(1rem, 4vw, 3rem);
+    padding: 1.4rem 0;
+    border-top: 1px solid var(--faint);
+  }
+  .req dt {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .req-count {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .req dd {
+    margin: 0;
+  }
+  /* One skill per cell, in the given order, read left to right. */
+  .req-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.7rem 2rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .req-items li {
+    position: relative;
+    padding-left: 1rem;
+    color: rgb(255 255 255 / 0.85);
+    line-height: 1.4;
+  }
+  .req-items li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    width: 0.4rem;
+    height: 1px;
+    background: rgb(255 255 255 / 0.35);
+  }
+
+  /* Sits with the games link, well away from the requirements table. */
+  .pdf-note {
+    margin: clamp(3rem, 8vh, 4.5rem) 0 0;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .pdf-note a {
+    margin-left: 0.4rem;
+    color: #fff;
+    text-decoration: underline;
+    text-decoration-color: rgb(255 255 255 / 0.3);
+    text-underline-offset: 5px;
+  }
+  .pdf-note a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  /* Under the big link: the other ways on. */
+  .after-play {
+    margin: 1.25rem 0 0;
+    color: var(--muted);
+  }
+  .after-play a {
+    color: var(--ink) !important;
+    text-decoration: underline;
+    text-decoration-color: rgb(255 255 255 / 0.35);
+    text-underline-offset: 4px;
+  }
+  .after-play a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  /* Off to the games: one wide link at the end. */
+  .play {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 2rem;
+    padding: clamp(1.6rem, 4vw, 2.4rem) clamp(1.2rem, 3vw, 2rem);
+    border: 1px solid rgb(255 255 255 / 0.18);
+    text-decoration: none;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  }
+  .play:hover,
+  .play:focus-visible {
+    outline: none;
+    border-color: #fff;
+    transform: translate(-4px, -4px);
+    box-shadow: 8px 8px 0 #f4b740;
+  }
+  .play-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: clamp(2rem, 6vw, 3.8rem);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .play-arrow {
+    font-weight: 300;
+    transition: transform 0.2s;
+  }
+  .play:hover .play-arrow,
+  .play:focus-visible .play-arrow {
+    transform: translateX(8px);
+  }
+
+  @media (max-width: 767px) {
+    .release {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    .ver {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.4rem 0.9rem;
+    }
+    .when {
+      margin-top: 0;
+    }
+    .changes li {
+      grid-template-columns: 1fr;
+      gap: 0.2rem;
+    }
+    .tag {
+      margin-top: 0;
+    }
+    .req {
+      grid-template-columns: 1fr;
+      gap: 0.8rem;
+    }
+    .req-items {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.6rem 1rem;
+    }
+    .download {
+      flex: 1 1 100%;
+      justify-content: center;
+    }
+  }
+
+  /* ── coming in: the patch installs ───────────────────────────
+     The page builds in top to bottom: the header lines, then the index,
+     then the first releases rise into place one after another. */
+  .mast > *,
+  .index,
+  .release:nth-child(-n + 2) {
+    animation: build-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .mast > :nth-child(2) {
+    animation-delay: 0.05s;
+  }
+  .mast > :nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .mast > :nth-child(4) {
+    animation-delay: 0.15s;
+  }
+  .mast > :nth-child(5) {
+    animation-delay: 0.2s;
+  }
+  .mast > :nth-child(6) {
+    animation-delay: 0.25s;
+  }
+  .index {
+    animation-delay: 0.3s;
+  }
+  .release:nth-child(1) {
+    animation-delay: 0.36s;
+  }
+  .release:nth-child(2) {
+    animation-delay: 0.42s;
+  }
+  @keyframes build-in {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+
+  /* ── leaving: progress saved ─────────────────────────────────
+     The page settles down and away as the screen fades. */
+  :global(html.sys-leaving) .notes-page {
+    opacity: 0.4;
+    transform: translateY(18px) scale(0.985);
+    transition:
+      opacity 0.36s ease-in,
+      transform 0.36s cubic-bezier(0.55, 0, 0.75, 0.2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot,
+    .live,
+    .mast > *,
+    .index,
+    .release {
+      animation: none !important;
+    }
+    :global(html.sys-leaving) .notes-page {
+      transform: none;
+    }
+  }
+
+  @media print {
+    .actions,
+    .index,
+    .pdf-note,
+    .play {
+      display: none;
+    }
+    .notes-page {
+      --ink: #111;
+      --muted: #555;
+      --faint: #ddd;
+    }
+    .num {
+      -webkit-text-stroke-color: #333;
+    }
+    .text,
+    .req dd,
+    .title,
+    .bio {
+      color: #222;
+    }
+  }
+</style>

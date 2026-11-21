@@ -1,0 +1,208 @@
+---
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+  src: string;
+  title: string;
+  /** Local image (optimized) or a remote URL (e.g. a YouTube thumbnail). */
+  cover: ImageMetadata | string;
+  // Only needed for embeds whose build doesn't rescale itself to fit its
+  // container (e.g. a Unity WebGL export with a fixed Default Canvas
+  // Width/Height) — when set, the iframe is created at this exact native
+  // pixel size and then CSS-scaled down to fit the frame, instead of being
+  // stretched to 100%/100% (which is what crops a fixed-size canvas).
+  nativeWidth?: number;
+  nativeHeight?: number;
+  /** Text under the play button. Games say "Play the game!", videos say
+   *  "Watch the video" — same overlay, different verb. */
+  label?: string;
+  /** Accessible name for the play button + iframe title suffix. */
+  action?: string;
+  /** iframe `allow` list. Defaults suit a game build; a YouTube embed needs
+   *  encrypted-media / picture-in-picture instead of gamepad. */
+  allow?: string;
+}
+
+const {
+  src,
+  title,
+  cover,
+  nativeWidth,
+  nativeHeight,
+  label = "Play the game!",
+  action = "play in browser",
+  allow = "autoplay; fullscreen; gamepad",
+} = Astro.props;
+const aspectRatio =
+  nativeWidth && nativeHeight ? `${nativeWidth} / ${nativeHeight}` : "16 / 9";
+---
+
+<div
+  class="embed-frame border-border overflow-hidden rounded border"
+  style={`aspect-ratio: ${aspectRatio}`}
+  data-embed
+  data-embed-src={src}
+  data-embed-title={`${title} — ${action}`}
+  data-embed-allow={allow}
+  data-embed-native-width={nativeWidth}
+  data-embed-native-height={nativeHeight}
+>
+  <button
+    type="button"
+    class="embed-play"
+    data-embed-play
+    aria-label={`${title} — ${action}`}
+  >
+    {
+      typeof cover === "string" ? (
+        <img src={cover} alt="" width={960} height={540} class="embed-play-cover" />
+      ) : (
+        <Image
+          src={cover}
+          alt=""
+          width={960}
+          height={540}
+          class="embed-play-cover"
+        />
+      )
+    }
+    <span class="embed-play-overlay">
+      <span class="embed-play-icon" aria-hidden="true">▶</span>
+      <span class="embed-play-label">{label}</span>
+    </span>
+  </button>
+</div>
+
+<script>
+  function initPlayableEmbeds() {
+    document.querySelectorAll<HTMLElement>("[data-embed]").forEach(frame => {
+      if (frame.dataset.embedInit) return;
+      frame.dataset.embedInit = "true";
+
+      const button = frame.querySelector<HTMLButtonElement>("[data-embed-play]");
+      const src = frame.dataset.embedSrc;
+      const title = frame.dataset.embedTitle ?? "Play in browser";
+      if (!button || !src) return;
+
+      const nativeWidth = Number(frame.dataset.embedNativeWidth) || 0;
+      const nativeHeight = Number(frame.dataset.embedNativeHeight) || 0;
+
+      button.addEventListener("click", () => {
+        const iframe = document.createElement("iframe");
+        iframe.src = src;
+        iframe.title = title;
+        iframe.loading = "lazy";
+        iframe.allow = frame.dataset.embedAllow ?? "autoplay; fullscreen; gamepad";
+        iframe.allowFullscreen = true;
+        iframe.style.border = "none";
+        iframe.style.display = "block";
+        // Astro's scoped <style> below only applies to elements present
+        // in this component's own markup at build time — an element
+        // created here in JS never gets that scoping attribute, so any
+        // ".embed-frame iframe" CSS rule would silently never match it. Set
+        // sizing inline instead, which always applies regardless.
+        if (nativeWidth && nativeHeight) {
+          // Some embedded builds (e.g. a Unity WebGL export with a fixed
+          // Default Canvas Width/Height) don't rescale themselves to fit
+          // whatever container they're placed in — stretching them to
+          // 100%/100% just crops them instead of scaling them down. Give
+          // the iframe its real native size, then shrink the whole element
+          // with a CSS transform to fit the frame; that scales the embed as
+          // a unit rather than clipping it.
+          iframe.style.width = `${nativeWidth}px`;
+          iframe.style.height = `${nativeHeight}px`;
+          iframe.style.transformOrigin = "top left";
+          frame.style.position = "relative";
+
+          const rescale = () => {
+            const scale = frame.clientWidth / nativeWidth;
+            iframe.style.transform = `scale(${scale})`;
+          };
+          new ResizeObserver(rescale).observe(frame);
+          rescale();
+        } else {
+          iframe.style.width = "100%";
+          iframe.style.height = "100%";
+        }
+        frame.replaceChildren(iframe);
+      });
+    });
+  }
+
+  initPlayableEmbeds();
+  document.addEventListener("astro:page-load", initPlayableEmbeds);
+</script>
+
+<style>
+  /* Aspect ratio is set inline per-instance (native game resolution when
+     known, 16:9 fallback otherwise — see the component script above). */
+  .embed-play {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  .embed-play-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.6);
+  }
+
+  .embed-play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    background: color-mix(in srgb, black 15%, transparent);
+    transition: background 0.2s ease;
+  }
+
+  .embed-play:hover .embed-play-overlay,
+  .embed-play:focus-visible .embed-play-overlay {
+    background: color-mix(in srgb, black 30%, transparent);
+  }
+
+  .embed-play-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-size: 1.5rem;
+    padding-left: 0.25rem;
+    transition: transform 0.2s ease;
+  }
+
+  .embed-play:hover .embed-play-icon,
+  .embed-play:focus-visible .embed-play-icon {
+    transform: scale(1.08);
+  }
+
+  .embed-play-label {
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .embed-play-overlay,
+    .embed-play-icon {
+      transition: none;
+    }
+  }
+</style>

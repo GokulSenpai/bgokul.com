@@ -1,0 +1,43 @@
+---
+/**
+ * A short chain of states read left to right with arrows, wrapping on
+ * small screens (e.g. Curiosity → Fear → Relief → Curiosity).
+ */
+interface Props {
+  steps: string[];
+}
+const { steps } = Astro.props;
+---
+
+<p class="cycle">
+  {
+    steps.map((s, i) => (
+      <>
+        <span class="step">{s}</span>
+        {i < steps.length - 1 && <span class="arrow" aria-label="then">→</span>}
+      </>
+    ))
+  }
+</p>
+
+<style>
+  .cycle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem 0.75rem;
+    margin: 2.25rem 0 !important;
+    padding: 1.25rem 1rem;
+    border-block: 1px solid var(--bd-line, rgb(154 160 214 / 0.15));
+    font-style: italic;
+  }
+  .step {
+    color: var(--bd-strong, #fff);
+    font-weight: 600;
+  }
+  .arrow {
+    color: var(--bd-accent, #f4b740);
+    font-style: normal;
+  }
+</style>

@@ -1,0 +1,348 @@
+---
+/**
+ * The letter from 17YA, playable, using the game's own text. Pick a word
+ * from the wall, then the blank it belongs in; a wrong blank shakes and
+ * refuses it, as in the game. Once the six are placed, BRAVEST writes
+ * itself in a moment later, the way it does in the game's second room.
+ * Without JS the letter simply shows complete.
+ */
+
+// Shuffled so the bank doesn't read in letter order.
+const BANK = ["SLEEP", "PAPA", "DUCK", "MAMA", "ILYA", "WAITING"];
+
+// {WORD} is a blank the reader fills; {WORD!} writes itself at the end.
+const sections: string[][] = [
+  ["Dear {ILYA},", "I need you to know why I did this."],
+  ["I know you have been {WAITING}.", "I brought your {DUCK} with me. He kept me company."],
+  [
+    "Lately I think about the night you asked me why clocks tick. I told you the clock was thinking.",
+    "You know how {SLEEP} never stays long?",
+    "It was like that for {MAMA} too.",
+    "They said I could help somehow.",
+  ],
+  ["I kept thinking about her. I hope you know she loved you. I hope you know I did too."],
+  ["You are the {BRAVEST!} person I have ever met. Even more than me."],
+  ["All the love I have is yours. It does not stop.", "Not when I am far away. Not ever."],
+  ["The world is going to be kind to you.", "I asked it to."],
+  ["— {PAPA}"],
+];
+
+type Part = { text: string } | { blank: string; auto: boolean };
+const parse = (line: string): Part[] => {
+  const parts: Part[] = [];
+  line.split(/(\{[A-Z]+!?\})/).forEach(chunk => {
+    if (!chunk) return;
+    const m = chunk.match(/^\{([A-Z]+)(!?)\}$/);
+    parts.push(m ? { blank: m[1], auto: m[2] === "!" } : { text: chunk });
+  });
+  return parts;
+};
+---
+
+<figure class="letter-wrap" data-letter>
+  <div class="bank" data-bank>
+    <p class="bank-label">On the wall</p>
+    <div class="bank-words">
+      {
+        BANK.map(w => (
+          <button type="button" class="word" data-word={w} aria-pressed="false">
+            {w}
+          </button>
+        ))
+      }
+    </div>
+    <p class="bank-help">Pick a word, then the blank it belongs in.</p>
+  </div>
+
+  <div class="letter" data-letter-paper>
+    {
+      sections.map(section => (
+        <div class="section">
+          {section.map(line => (
+            <p class="line">
+              {parse(line).map(p =>
+                "blank" in p ? (
+                  p.auto ? (
+                    <span class="blank auto" data-auto-blank>
+                      <span class="blank-word">{p.blank}</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      class="blank"
+                      data-blank={p.blank}
+                      aria-label="Empty blank in the letter"
+                    >
+                      <span class="blank-word">{p.blank}</span>
+                    </button>
+                  )
+                ) : (
+                  p.text
+                )
+              )}
+            </p>
+          ))}
+        </div>
+      ))
+    }
+    <p class="letter-note" aria-live="polite" data-letter-note></p>
+  </div>
+  <button type="button" class="reset" data-reset hidden>Start the letter again</button>
+</figure>
+
+<script>
+  function initLetter() {
+    document.querySelectorAll<HTMLElement>("[data-letter]").forEach(root => {
+      if (root.dataset.init) return;
+      root.dataset.init = "true";
+      root.classList.add("is-playable"); // blanks start empty only with JS
+
+      const words = [...root.querySelectorAll<HTMLButtonElement>("[data-word]")];
+      const blanks = [...root.querySelectorAll<HTMLButtonElement>("[data-blank]")];
+      const auto = root.querySelector<HTMLElement>("[data-auto-blank]");
+      const note = root.querySelector<HTMLElement>("[data-letter-note]")!;
+      const reset = root.querySelector<HTMLButtonElement>("[data-reset]")!;
+      let selected: HTMLButtonElement | null = null;
+      let autoTimer = 0;
+
+      const select = (w: HTMLButtonElement | null) => {
+        words.forEach(b => b.setAttribute("aria-pressed", String(b === w)));
+        selected = w;
+        root.classList.toggle("has-selection", !!w);
+      };
+
+      words.forEach(w => w.addEventListener("click", () => select(selected === w ? null : w)));
+
+      const finish = () => {
+        // The one word he writes himself, a beat after the rest.
+        autoTimer = window.setTimeout(() => {
+          auto?.classList.add("filled");
+          root.classList.add("is-complete");
+          note.textContent = "The last word writes itself.";
+          reset.hidden = false;
+        }, 1600);
+      };
+
+      blanks.forEach(b =>
+        b.addEventListener("click", () => {
+          if (!selected || b.classList.contains("filled")) return;
+          if (selected.dataset.word === b.dataset.blank) {
+            b.classList.add("filled");
+            b.setAttribute("aria-label", b.dataset.blank!);
+            selected.disabled = true;
+            selected.classList.add("used");
+            select(null);
+            if (blanks.every(x => x.classList.contains("filled"))) finish();
+          } else {
+            // Wrong blank: refuse it.
+            b.classList.remove("refuse");
+            void b.offsetWidth;
+            b.classList.add("refuse");
+          }
+        })
+      );
+
+      reset.addEventListener("click", () => {
+        clearTimeout(autoTimer);
+        blanks.forEach(b => {
+          b.classList.remove("filled");
+          b.setAttribute("aria-label", "Empty blank in the letter");
+        });
+        auto?.classList.remove("filled");
+        words.forEach(w => {
+          w.disabled = false;
+          w.classList.remove("used");
+        });
+        root.classList.remove("is-complete");
+        note.textContent = "";
+        reset.hidden = true;
+        select(null);
+      });
+    });
+  }
+  initLetter();
+  document.addEventListener("astro:page-load", initLetter);
+</script>
+
+<style>
+  .letter-wrap {
+    margin: 2.5rem 0;
+  }
+
+  /* ── word bank: chalk words on a strip of wall ────────── */
+  .bank {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgb(200 188 168 / 0.12);
+    background: #1b1918;
+    text-align: center;
+  }
+  .bank-label,
+  .bank-help {
+    margin: 0 !important;
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.62rem !important;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-indent: 0 !important;
+    color: var(--nv-muted);
+  }
+  .bank-help {
+    margin-top: 0.5rem !important;
+    letter-spacing: 0.1em;
+  }
+  .bank-words {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem 0.6rem;
+    margin-top: 0.5rem;
+  }
+  .word {
+    padding: 0.15em 0.5em;
+    border: 1px solid transparent;
+    background: none;
+    color: #f6efd9;
+    font-family: var(--nv-display);
+    font-size: 1.05em;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 10px rgb(200 148 58 / 0.3);
+    cursor: pointer;
+    transition: border-color 0.2s, opacity 0.3s;
+  }
+  .word:hover {
+    border-color: rgb(200 148 58 / 0.4);
+  }
+  .word[aria-pressed="true"] {
+    border-color: var(--nv-accent);
+    background: rgb(200 148 58 / 0.12);
+  }
+  .word.used {
+    opacity: 0.18;
+    cursor: default;
+    text-decoration: line-through;
+  }
+  .letter-wrap:not(.is-playable) .bank {
+    display: none;
+  }
+
+  /* ── the letter itself ─────────────────────────────────── */
+  .letter {
+    margin-top: 1rem;
+    padding: 2.25rem 1.5rem;
+    border: 1px solid rgb(200 148 58 / 0.22);
+    background: rgb(240 234 216 / 0.03);
+  }
+  @media (min-width: 640px) {
+    .letter {
+      padding: 3rem 3.25rem;
+    }
+  }
+  .section + .section {
+    margin-top: 1.4rem;
+  }
+  .line {
+    margin: 0 !important;
+    font-family: var(--nv-display);
+    font-size: 1.2em;
+    font-style: italic;
+    line-height: 1.75;
+    text-indent: 0 !important;
+    color: rgb(240 234 216 / 0.85);
+  }
+
+  .blank {
+    display: inline-block;
+    min-width: 4.5em;
+    margin: 0 0.15em;
+    padding: 0 0.2em;
+    border: 0;
+    border-bottom: 1px solid rgb(200 148 58 / 0.55);
+    background: none;
+    color: #e0aa50;
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.72em;
+    font-style: normal;
+    letter-spacing: 0.08em;
+    vertical-align: baseline;
+    cursor: default;
+  }
+  .is-playable .blank:not(.filled) .blank-word {
+    visibility: hidden;
+  }
+  .is-playable.has-selection button.blank:not(.filled) {
+    cursor: pointer;
+    background: rgb(200 148 58 / 0.08);
+  }
+  .is-playable.has-selection button.blank:not(.filled):hover {
+    background: rgb(200 148 58 / 0.18);
+  }
+  /* The self-writing word: no blank line, just an empty space it writes
+     itself into. */
+  .blank.auto {
+    border-bottom: 0;
+  }
+  .blank.filled .blank-word {
+    animation: chalk-in 0.6s ease both;
+  }
+  .blank.auto.filled .blank-word {
+    animation-duration: 1.6s;
+  }
+  @keyframes chalk-in {
+    from {
+      opacity: 0;
+      filter: blur(3px);
+    }
+  }
+  .blank.refuse {
+    animation: refuse 0.35s ease;
+    border-bottom-color: #b44a38;
+  }
+  @keyframes refuse {
+    20%,
+    60% {
+      transform: translateX(-4px);
+    }
+    40%,
+    80% {
+      transform: translateX(4px);
+    }
+  }
+
+  .letter-note {
+    margin: 1.75rem 0 0 !important;
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.65rem !important;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-indent: 0 !important;
+    color: var(--nv-accent);
+  }
+  .letter-note:empty {
+    display: none;
+  }
+  .reset {
+    display: block;
+    margin: 0.9rem auto 0;
+    padding: 0.3em 0.8em;
+    border: 1px solid rgb(200 188 168 / 0.2);
+    background: none;
+    color: var(--nv-muted);
+    font: inherit;
+    font-size: 0.8em;
+    cursor: pointer;
+  }
+  .reset:hover {
+    color: var(--nv-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .blank.filled .blank-word,
+    .blank.refuse {
+      animation: none;
+    }
+  }
+</style>

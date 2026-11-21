@@ -1,0 +1,201 @@
+---
+/**
+ * A save file's portrait on the save-select screen: a tiny piece of pixel
+ * art per section, drawn in the main menu's palette instead of a photo.
+ *
+ *   design      a game cartridge with an amber label
+ *   narrative   a closed book with a gold frame and a ribbon
+ *   coding      a terminal window with a blinking prompt
+ *   breakdowns  a magnifying glass over a case file
+ *
+ * Each icon is a list of strings (one character per pixel, "." is empty)
+ * drawn as an SVG grid with crisp edges, so it stays sharp at any size,
+ * centred on a small 24 x 15 canvas so it fills the portrait frame.
+ */
+type Kind = "design" | "narrative" | "coding" | "breakdowns";
+interface Props {
+  kind: Kind;
+}
+const { kind } = Astro.props;
+
+type Layer = { map: string[]; x: number; y: number; colors: Record<string, string> };
+
+const ICONS: Record<Kind, { bg: [string, string]; layers: Layer[] }> = {
+  design: {
+    bg: ["#1d2256", "#12153a"],
+    layers: [
+      {
+        x: 8,
+        y: 3,
+        colors: { "#": "#0b0d24", b: "#5b609a", d: "#41467d", L: "#efecdc", a: "#ffd27a", A: "#c9463d", g: "#d9b25a", h: "#7a80bb" },
+        map: [
+          "..############..",
+          ".#hhhhhhhhhhhh#.",
+          ".#bLLLLLLLLLLb#.",
+          ".#bLaaaaaaaaLb#.",
+          ".#bLaAAAAAAaLb#.",
+          ".#bLaaaaaaaaLb#.",
+          ".#bLLLLLLLLLLb#.",
+          ".#bbbbbbbbbbbb#.",
+          ".#bdbdbdbdbdbb#.",
+          ".#bbbbbbbbbbbb#.",
+          ".##############.",
+          "...g.g.g.g.g....",
+        ],
+      },
+    ],
+  },
+  narrative: {
+    bg: ["#2a1835", "#15102a"],
+    layers: [
+      {
+        x: 8,
+        y: 2,
+        colors: { "#": "#0b0d24", R: "#5a1c14", r: "#8a3326", g: "#e7c98f", y: "#f2d58a", p: "#efecdc", k: "#ffd27a" },
+        map: [
+          ".##############.",
+          ".#Rrrrrrrrrrrr#p",
+          ".#Rrggggggggrr#p",
+          ".#Rrgrrrrrrgrr#p",
+          ".#Rrgrryyrrgrr#p",
+          ".#Rrgryyyyrgrr#p",
+          ".#Rrgrryyrrgrr#p",
+          ".#Rrgrrrrrrgrr#p",
+          ".#Rrggggggggrr#p",
+          ".#Rrrrrrrrrrrr#p",
+          ".##############p",
+          "..pppppppppppppp",
+          "..........k.....",
+          "..........k.....",
+          ".........k.k....",
+        ],
+      },
+    ],
+  },
+  coding: {
+    bg: ["#14203a", "#0b1226"],
+    layers: [
+      {
+        x: 8,
+        y: 3,
+        colors: { "#": "#9aa0d6", t: "#3c4078", R: "#ff6f61", Y: "#ffd27a", G: "#7cbf5a", k: "#070818", c: "#efecdc", d: "#555a8c" },
+        map: [
+          "################",
+          "#tRtYtGttttttttt",
+          "################",
+          "#kkkkkkkkkkkkkk#",
+          "#kckkkkkkkkkkkk#",
+          "#kkckkkkkkkkkkk#",
+          "#kckkkkkkkkkkkk#",
+          "#kkkkkkkkkkkkkk#",
+          "#kddddkkdddkkkk#",
+          "#kkddddddkkkkkk#",
+          "#kddkkddddkkkkk#",
+          "#kkkkkkkkkkkkkk#",
+          "################",
+        ],
+      },
+      // The cursor, on its own layer so it can blink.
+      { x: 12, y: 9, colors: { a: "#ffd27a" }, map: ["aaa"] },
+    ],
+  },
+  breakdowns: {
+    bg: ["#2a2440", "#16122a"],
+    layers: [
+      {
+        x: 6,
+        y: 2,
+        colors: { "#": "#5c4520", m: "#cfa865", l: "#8e6a32", s: "#8e2a1e" },
+        map: [
+          "###########",
+          "#mmmmmmmmm#",
+          "#mlllllllm#",
+          "#mmmmmmmmm#",
+          "#mllllllmm#",
+          "#mmmmmmmmm#",
+          "#mlllllllm#",
+          "#mmmmmmmmm#",
+          "#mlllmmmmm#",
+          "#mmmmmmmmm#",
+          "#mmmmmsssm#",
+          "#mmmmsmmsm#",
+          "#mmmmmsssm#",
+          "#mmmmmmmmm#",
+          "###########",
+        ],
+      },
+      {
+        x: 13,
+        y: 5,
+        colors: { w: "#d9dcef", W: "#9aa0d6", g: "#ffffff", f: "#bfe3f5", h: "#8a5a2b", H: "#5c3a1c" },
+        map: [
+          "...wwww......",
+          ".ww....ww....",
+          ".w.ggf...w...",
+          "w.gf......w..",
+          "w.f.......w..",
+          "w.........W..",
+          "w.........W..",
+          ".w.......W...",
+          ".WW....WWHh..",
+          "...WWWW..Hh..",
+          "..........Hh.",
+          "...........Hh",
+        ],
+      },
+    ],
+  },
+};
+
+const icon = ICONS[kind];
+// Flatten every layer to one rect per pixel.
+const raw = icon.layers.flatMap((layer, li) =>
+  layer.map.flatMap((row, y) =>
+    [...row].flatMap((ch, x) =>
+      ch === "." || !layer.colors[ch]
+        ? []
+        : [{ x: layer.x + x, y: layer.y + y, fill: layer.colors[ch], blink: kind === "coding" && li === 1 }]
+    )
+  )
+);
+// A small 16:10 canvas (24 x 15) with the icon centred, so it fills the
+// portrait frame instead of sitting small in the middle.
+const VW = 24;
+const VH = 15;
+const minX = Math.min(...raw.map(p => p.x));
+const maxX = Math.max(...raw.map(p => p.x));
+const minY = Math.min(...raw.map(p => p.y));
+const maxY = Math.max(...raw.map(p => p.y));
+const dx = Math.floor((VW - (maxX - minX + 1)) / 2) - minX;
+const dy = Math.floor((VH - (maxY - minY + 1)) / 2) - minY;
+const pixels = raw.map(p => ({ ...p, x: p.x + dx, y: p.y + dy }));
+---
+
+<svg class="portrait" viewBox={`0 0 ${VW} ${VH}`} shape-rendering="crispEdges" aria-hidden="true">
+  <rect width={VW} height={VH} fill={icon.bg[1]} />
+  <rect width={VW} height="8" fill={icon.bg[0]} />
+  {/* A dithered seam between the two background bands. */}
+  {Array.from({ length: VW / 2 }, (_, i) => <rect x={i * 2 + (i % 2)} y="8" width="1" height="1" fill={icon.bg[0]} />)}
+  {pixels.map(p => <rect x={p.x} y={p.y} width="1" height="1" fill={p.fill} class={p.blink ? "blink" : undefined} />)}
+</svg>
+
+<style>
+  .portrait {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .blink {
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .blink {
+      animation: none;
+    }
+  }
+</style>

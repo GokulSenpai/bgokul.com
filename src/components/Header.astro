@@ -1,0 +1,338 @@
+---
+/**
+ * The system bar: two small HUD windows in the top corners of every
+ * "loaded" page, matching the main menu (pixel font, night palette, lamp
+ * amber, the same little windows as the tip and sound panels). The main menu is the
+ * console; every section is something it loads, so this bar is just the
+ * way back:
+ *
+ *   ◀ Esc  Main menu                                   PATCH NOTES
+ *
+ * The back target is the page's parent (a journal entry goes back to the
+ * Journal, a breakdown to Breakdowns, a top-level page to the main menu),
+ * and Esc does the same. The right side names where you are.
+ *
+ * Props are kept from the old header so every page picks this up as is
+ * (`wide` matches the wider content column; `accented` is unused now).
+ */
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { stripBase, stripLocale } from "@/utils/withBase";
+import { useTranslations } from "@/i18n";
+import config from "@/config";
+
+type Props = {
+  wide?: boolean;
+  accented?: boolean;
+  /** Override the name shown on the right. */
+  name?: string;
+};
+
+const { wide, name: nameOverride } = Astro.props;
+const locale = Astro.currentLocale ?? config.site.lang;
+const t = useTranslations(locale);
+const url = (p: string) => getRelativeLocaleUrl(locale, p);
+
+const path = stripLocale(stripBase(Astro.url.pathname).replace(/\/+$/, "") || "/", locale);
+const seg = path.split("/").filter(Boolean);
+const decode = (v: string) => {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+};
+
+// Where "back" goes, what it's called, and the name of this screen.
+let back = { href: url(""), label: "Main menu" };
+let name = "";
+switch (seg[0]) {
+  case "resume":
+    name = "Patch notes";
+    break;
+  case "contact":
+    name = "Business card";
+    break;
+  case "achievements":
+    name = "Trophies";
+    break;
+  case "credits":
+    back = { href: url("achievements"), label: "Achievements" };
+    name = "Credits";
+    break;
+  case "blog":
+    if (seg[1] === "all") {
+      back = { href: url("blog"), label: "Journal" };
+      name = "All entries";
+    } else if (seg[1]) {
+      back = { href: url("blog"), label: "Journal" };
+      name = "Journal entry";
+    } else name = "Journal";
+    break;
+  case "tags":
+    if (seg[1]) {
+      back = { href: url("tags"), label: "Tags" };
+      name = `Tag: ${decode(seg[1])}`;
+    } else {
+      back = { href: url("blog"), label: "Journal" };
+      name = "Tags";
+    }
+    break;
+  case "archives":
+    back = { href: url("blog"), label: "Journal" };
+    name = "Archives";
+    break;
+  case "search":
+    back = { href: url("blog"), label: "Journal" };
+    name = t.nav.search;
+    break;
+  case "portfolio":
+    if (seg[2]) {
+      const parent: Record<string, [string, string]> = {
+        breakdowns: ["Breakdowns", "Case file"],
+        narrative: ["Contents", "Chapter"],
+      };
+      const [label, here] = parent[seg[1]] ?? ["Back", ""];
+      back = { href: `/portfolio/${seg[1]}`, label };
+      name = here;
+    } else {
+      back = { href: "/portfolio", label: "Save files" };
+      name = seg[1] ? seg[1][0].toUpperCase() + seg[1].slice(1) : "";
+    }
+    break;
+  case undefined:
+    break;
+  default:
+    name = "Game over"; // 404
+}
+name = nameOverride ?? name;
+// More than one level deep: a ⌂ window beside the back one, straight to the
+// main menu from anywhere.
+const home = url("");
+const showHome = back.href !== home;
+// A tag's page goes back to wherever you clicked the tag (an entry, the
+// Journal, the archives…), worked out in the browser; Tags if unknown.
+const smartBack = seg[0] === "tags" && !!seg[1];
+---
+
+<a id="skip-to-content" href="#main-content" class="skip">{t.a11y.skipToContent}</a>
+
+<header class="sysbar" data-sysbar>
+  <div class:list={["sysbar-inner", wide ? "max-w-6xl" : "max-w-app"]}>
+    <div class="sys-left">
+      <a href={back.href} class="sys-back" data-sys-back data-smart-back={smartBack ? "" : undefined}>
+        <span class="sys-arrow" aria-hidden="true">◀</span>
+        <span class="sys-key" aria-hidden="true">Esc</span>
+        <span data-sys-back-label>{back.label}</span>
+      </a>
+      {
+        showHome && (
+          <a href={home} class="sys-back sys-home" data-sys-home title="Main menu (Home key)" aria-label="Main menu">
+            <span aria-hidden="true">⌂</span>
+          </a>
+        )
+      }
+    </div>
+    {name && <p class="sys-name">{name}</p>}
+  </div>
+</header>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { cameFrom } from "@/scripts/cameFrom";
+
+  // Where a tag's page should go back to, by the page you came from.
+  const JOURNAL_BACK: [RegExp, string][] = [
+    [/^\/blog\/all/, "All entries"],
+    [/^\/blog\/.+/, "Entry"],
+    [/^\/blog\/?$/, "Journal"],
+    [/^\/archives/, "Archives"],
+    [/^\/search/, "Search"],
+  ];
+
+  let off: (() => void) | null = null;
+
+  function initSysbar() {
+    off?.();
+    off = null;
+    const link = document.querySelector<HTMLAnchorElement>("[data-sys-back]");
+    if (!link) return;
+    const homeLink = document.querySelector<HTMLAnchorElement>("[data-sys-home]");
+
+    // A tag's page: back to where the tag was clicked, if that was a
+    // Journal page (an entry, the Journal, all entries, archives, search).
+    if (link.hasAttribute("data-smart-back")) {
+      const prev = cameFrom();
+      const hit = JOURNAL_BACK.find(([re]) => re.test(prev));
+      if (hit && prev.replace(/\/+$/, "") !== location.pathname.replace(/\/+$/, "")) {
+        link.href = prev;
+        const label = link.querySelector("[data-sys-back-label]");
+        if (label) label.textContent = hit[1];
+      }
+    }
+
+    // Leaving: a short fade to night-black, then the next screen (which
+    // fades in on its own), so going back is never a hard cut.
+    let leaving = false;
+    const leave = (href = link.href) => {
+      if (leaving) return;
+      leaving = true;
+      // Lets a page add its own touch to leaving (e.g. a sound); detail.href
+      // says where to.
+      document.dispatchEvent(new CustomEvent("sys:leaving", { detail: { href } }));
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return navigate(href);
+      document.documentElement.classList.add("sys-leaving");
+      window.setTimeout(() => navigate(href), 380);
+    };
+    const onClick = (a: HTMLAnchorElement) => (e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      leave(a.href);
+    };
+    link.addEventListener("click", onClick(link));
+    if (homeLink) homeLink.addEventListener("click", onClick(homeLink));
+    // Esc goes back, unless something on the page is using it (a dialog,
+    // a lightbox, a text field).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      const t = e.target as HTMLElement;
+      if (t.closest("input, textarea, select, [contenteditable], dialog")) return;
+      if (document.querySelector("dialog[open]")) return;
+      leave();
+    };
+    // The Home key: straight to the main menu (when there's a ⌂ window).
+    const onHome = (e: KeyboardEvent) => {
+      if (e.key !== "Home" || !homeLink || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable]")) return;
+      e.preventDefault();
+      leave(homeLink.href);
+    };
+    document.addEventListener("keydown", onHome);
+    document.addEventListener("keydown", onKey);
+    off = () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onHome);
+    };
+
+    // Skip link: focus the main content without a jump.
+    const skip = document.getElementById("skip-to-content");
+    skip?.addEventListener("click", e => {
+      const target = document.getElementById("main-content");
+      if (!target) return;
+      e.preventDefault();
+      target.setAttribute("tabindex", "-1");
+      target.addEventListener("blur", () => target.removeAttribute("tabindex"), { once: true });
+      target.focus();
+    });
+  }
+
+  document.addEventListener("astro:page-load", initSysbar);
+</script>
+
+<style>
+  .skip {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 60;
+    padding: 0.5rem 0.8rem;
+    background: #07081a;
+    color: #ffd27a;
+    font-family: var(--font-pixel), monospace;
+  }
+  .skip:focus {
+    top: 0.75rem;
+  }
+
+  /* No full-width bar: two small HUD windows in the top corners (the way back, and
+     where you are), like the tip and sound windows on the main menu. */
+  .sysbar {
+    position: relative;
+    z-index: 20;
+    font-family: var(--font-pixel), ui-monospace, monospace;
+    font-variant-ligatures: none;
+  }
+  .sysbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0 auto;
+    padding: 0.85rem 1rem 0;
+  }
+  .sys-left {
+    display: flex;
+    gap: 0.5rem;
+  }
+  /* ⌂: a small square window beside the back one. */
+  .sys-home {
+    justify-content: center;
+    min-width: 40px;
+    padding: 0 0.6rem !important;
+    font-size: 1.05rem;
+  }
+  .sys-back,
+  .sys-name {
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.88);
+    box-shadow: 3px 3px 0 rgb(3 4 14 / 0.7);
+    backdrop-filter: blur(4px);
+  }
+  .sys-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 40px;
+    padding: 0 0.8rem 0 0.6rem;
+    color: #9aa0d6;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+  .sys-back:hover,
+  .sys-back:focus-visible {
+    outline: none;
+    border-color: #ffd27a;
+    color: #ffd27a;
+  }
+  .sys-back:focus-visible span:last-child {
+    text-decoration: underline dashed;
+    text-underline-offset: 4px;
+  }
+  .sys-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+  }
+  .sys-back:hover .sys-arrow {
+    transform: translateX(-3px);
+  }
+  .sys-key {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.8rem;
+    height: 1.45rem;
+    padding: 0 0.35rem;
+    border: 2px solid rgb(154 160 214 / 0.5);
+    border-bottom-width: 3px;
+    border-radius: 3px;
+    color: #efecdc;
+    font-size: 0.68rem;
+  }
+  .sys-name {
+    margin: 0;
+    padding: 0.55rem 0.8rem;
+    color: #ffd27a;
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    text-align: right;
+    text-transform: uppercase;
+  }
+
+  @media (hover: none) {
+    .sys-key {
+      display: none;
+    }
+  }
+</style>

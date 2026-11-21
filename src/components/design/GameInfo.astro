@@ -1,0 +1,203 @@
+---
+/**
+ * The details shown for the selected game in the Design library: pixel
+ * badges, tagline, role/tools and an amber "Press start" button, in the
+ * main menu's style. Used twice: in the big
+ * preview panel (desktop) and inside each expanded list card (mobile).
+ */
+import { taglineHtml } from "@/utils/formatTagline";
+
+type Badge = { label: string; kind: string };
+type Props = {
+  href: string;
+  accent: string;
+  tagline?: string;
+  roles?: string;
+  tools?: string;
+  badges: Badge[];
+  /** Still in development: show a greyed-out "Coming soon" instead of Start. */
+  locked?: boolean;
+};
+
+const { href, accent, tagline, roles, tools, badges, locked } = Astro.props;
+---
+
+<div class="info" style={`--game: ${accent}`}>
+  {
+    badges.length > 0 && (
+      <ul class="badges">
+        {badges.map(b => (
+          <li class:list={["badge", `badge-${b.kind}`]}>{b.label}</li>
+        ))}
+      </ul>
+    )
+  }
+  {tagline && <p class="tagline" set:html={taglineHtml(tagline)} />}
+  {
+    (roles || tools) && (
+      <dl class="meta">
+        {roles && (
+          <>
+            <dt>Role</dt>
+            <dd>{roles}</dd>
+          </>
+        )}
+        {tools && (
+          <>
+            <dt>Tools</dt>
+            <dd>{tools}</dd>
+          </>
+        )}
+      </dl>
+    )
+  }
+  {
+    locked ? (
+      <button type="button" class="start is-locked" data-locked aria-disabled="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="5" y="11" width="14" height="9" rx="2" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+        </svg>
+        Coming soon
+      </button>
+    ) : (
+      <a href={href} class="start" data-start>
+        Press start <span class="start-arrow" aria-hidden="true">▶</span>
+      </a>
+    )
+  }
+</div>
+
+<style>
+  .info {
+    --game-light: color-mix(in srgb, var(--game) 70%, white);
+  }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    list-style: none;
+  }
+  /* Pixel tags in the menu's style: square, with a hard shadow. */
+  .badge {
+    --c: var(--game-light);
+    border: 2px solid color-mix(in srgb, var(--c) 60%, transparent);
+    background: rgb(12 14 42 / 0.75);
+    color: color-mix(in srgb, var(--c) 55%, white);
+    border-radius: 3px;
+    box-shadow: 2px 2px 0 rgb(3 4 14 / 0.75);
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-shadow: none;
+    text-transform: uppercase;
+  }
+  .badge-award,
+  .badge-featured {
+    --c: #ffd27a;
+  }
+  .tagline {
+    margin: 0;
+    color: rgb(239 236 220 / 0.8);
+    max-width: 38rem;
+    font-size: clamp(0.98rem, 1.15vw, 1.12rem);
+    line-height: 1.6;
+    text-wrap: pretty;
+  }
+  .meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.3rem 0.9rem;
+    margin: 1rem 0 0;
+    font-size: 0.86rem;
+  }
+  .meta dt {
+    color: #9aa0d6;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding-top: 0.12rem;
+  }
+  .meta dd {
+    margin: 0;
+  }
+  /* Press start: an amber pixel button with a hard shadow, like the
+     main menu's dialogs. */
+  .start {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 48px;
+    margin-top: 1.4rem;
+    padding: 0 1.4rem;
+    border: 2px solid #ffd27a;
+    border-radius: 3px;
+    background: #ffd27a;
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.85);
+    color: #07081a;
+    font-size: 0.9rem;
+    letter-spacing: 0.14em;
+    text-shadow: none;
+    text-transform: uppercase;
+    text-decoration: none;
+    touch-action: manipulation;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
+  }
+  .start:hover,
+  .start:focus-visible {
+    outline: none;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 rgb(3 4 14 / 0.85);
+  }
+  .start:focus-visible {
+    border-color: #efecdc;
+  }
+  /* Locked: greyed out, no glow, but still focusable so it can say no. */
+  .start.is-locked {
+    border: 2px dashed rgb(154 160 214 / 0.45);
+    background: rgb(12 14 42 / 0.7);
+    box-shadow: none;
+    color: #9aa0d6;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: not-allowed;
+  }
+  .start.is-locked:hover,
+  .start.is-locked:focus-visible {
+    background: rgb(255 255 255 / 0.08);
+    box-shadow: none;
+    transform: none;
+  }
+  .start.is-locked svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .badge-wip {
+    --c: #9aa0d6;
+  }
+  .start-arrow {
+    font-size: 0.7rem;
+    animation: blink 1.1s steps(2, start) infinite;
+  }
+  @keyframes blink {
+    to {
+      visibility: hidden;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .start-arrow {
+      animation: none;
+    }
+  }
+</style>

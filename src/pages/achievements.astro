@@ -1,0 +1,1005 @@
+---
+/**
+ * Achievements: a JRPG list of little things to find around the site,
+ * like the Breakdowns list (same windows, same ▶ cursor, ↑/↓ to move).
+ *
+ * Progress lives in the visitor's browser (localStorage, see
+ * src/scripts/achievements.ts), so the page renders every row as locked
+ * and the script fills in what's been found before the list deals in.
+ * Hidden ones read "???" until found; locked ones show a hint.
+ *
+ * Collect them all for the platinum, "Keeper of the Light": the lighthouse
+ * beam turns gold.
+ */
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import PixelIcon from "@/components/achievements/PixelIcon.astro";
+import ClassPortrait from "@/components/achievements/ClassPortrait.astro";
+import { ACHIEVEMENTS, PLATINUM, PLAYER_TYPES, WHERE, type PlayerType } from "@/scripts/achievements";
+import config from "@/config";
+
+const total = ACHIEVEMENTS.length;
+const types = Object.entries(PLAYER_TYPES) as [PlayerType, { name: string; blurb: string }][];
+---
+
+<Layout title={`Achievements | ${config.site.title}`}>
+  <Header />
+
+  <Main pageTitle="Achievements" pageDesc="Little things to find around the site. They're saved in your browser.">
+    <div class="ach-page" data-ach-page>
+      <!-- Progress: a count and a bar of blocks, one per achievement. -->
+      <div class="progress" aria-live="polite">
+        <p class="progress-count"><span data-found>0</span> / {total} found</p>
+        <div class="progress-bar" aria-hidden="true">
+          {ACHIEVEMENTS.map(() => <span />)}
+        </div>
+      </div>
+
+      <!-- Your class (like the save files'), from what you've found: a
+           bar for each class, and the one you lean towards. -->
+      <div class="types" data-types>
+        <div class="types-text">
+          <p class="types-main"><span class="types-kicker">Your class</span> <span data-main-type>Not sure yet</span></p>
+          <p class="types-blurb" data-main-blurb>Find a few things and we'll see what you came here for.</p>
+          <ul class="types-bars">
+            {
+              types.map(([t, info]) => (
+                <li data-type={t}>
+                  <span class="types-name">{info.name}</span>
+                  <span class="types-bar" aria-hidden="true"><span /></span>
+                  <span class="types-count" data-type-count />
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+        <!-- Your class, as a little pixel party member. With the platinum,
+             the wardrobe: wear any class's look (← → or the arrows). -->
+        <div class="types-portrait">
+          <ClassPortrait />
+          <div class="wardrobe" data-wardrobe hidden>
+            <button type="button" class="wr-btn" data-look="-1" aria-label="Previous look">◀</button>
+            <span class="wr-name" data-look-name aria-live="polite"></span>
+            <button type="button" class="wr-btn" data-look="1" aria-label="Next look">▶</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- The platinum: locked until everything is found. -->
+      <div class="platinum" data-platinum>
+        <span class="icon"><PixelIcon name="trophy" /></span>
+        <div class="text">
+          <p class="kicker">Platinum</p>
+          <h2 class="title">
+            <span class="when-on">{PLATINUM.title}</span>
+            <span class="when-off">???</span>
+          </h2>
+          <p class="desc">
+            <span class="when-on">{PLATINUM.desc} Thanks for playing. <a href="/credits" class="credits-link">Open the Credits ▶</a></span>
+            <span class="when-off">Find everything below.</span>
+          </p>
+        </div>
+      </div>
+
+      <ul class="list" data-ach-list>
+        {
+          ACHIEVEMENTS.map(a => (
+            <li class:list={["ach", { "is-hidden": a.hidden }]} data-ach={a.id} tabindex="0">
+              <span class="cursor" aria-hidden="true">▶</span>
+              <span class="icon">
+                <PixelIcon name={a.icon} class="ic-on" />
+                <PixelIcon name="lock" class="ic-off" />
+              </span>
+              <div class="text">
+                <h2 class="title">
+                  <span class="when-on">{a.title}</span>
+                  <span class="when-off">{a.hidden ? "???" : a.title}</span>
+                  <span class={`ach-type t-${a.type}`}>{PLAYER_TYPES[a.type].name}</span>
+                </h2>
+                <p class="desc">
+                  <span class="when-on">{a.desc}</span>
+                  <span class="when-off">Hint: {a.hint}</span>
+                </p>
+              </div>
+              <span class="date" data-date></span>
+              {WHERE[a.id] && (
+                <a class="go" href={WHERE[a.id]} tabindex="-1">
+                  Go <span aria-hidden="true">▶</span>
+                </a>
+              )}
+            </li>
+          ))
+        }
+      </ul>
+
+      <div class="foot">
+        <p class="keys" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> Select <kbd>Enter</kbd> Go there <kbd>Esc</kbd> Back<span class="wr-keys" data-wardrobe-keys hidden> <kbd>←</kbd><kbd>→</kbd> Wardrobe</span></p>
+        {
+          /* Dev only (never built): unlock everything to see the platinum. */
+          import.meta.env.DEV && (
+            <button type="button" class="reset debug" data-debug-all>
+              debug: unlock all
+            </button>
+          )
+        }
+        <button type="button" class="reset" data-reset>Reset progress</button>
+      </div>
+
+      <!-- Reset confirmation, the quit box's little sibling. -->
+      <dialog class="confirm" data-confirm aria-labelledby="confirm-title">
+        <p class="confirm-kicker">System</p>
+        <h2 id="confirm-title" class="confirm-title">Reset all progress?</h2>
+        <p class="confirm-line">Every achievement goes back to locked.</p>
+        <div class="confirm-actions">
+          <button type="button" class="confirm-btn" data-yes>Reset</button>
+          <button type="button" class="confirm-btn" data-no autofocus>Keep</button>
+        </div>
+      </dialog>
+    </div>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { wheelSelect } from "@/scripts/wheelSelect";
+  import {
+    unlocked,
+    isPlatinum,
+    reset,
+    ACHIEVEMENTS,
+    playerTypes,
+    classTitle,
+    PLAYER_TYPES,
+    DUAL_CLASSES,
+    PLATINUM_CLASS,
+    type PlayerType,
+  } from "@/scripts/achievements";
+  import { trophyOpen, trophyClose, sfx } from "@/components/home/bootSound";
+  import { enteredFrom, soundOn } from "@/scripts/cameFrom";
+
+  // Each class's colour (as on its bar and tags).
+  const CLASS_COLOURS: Record<string, string> = {
+    scholar: "#ffd27a",
+    gamer: "#9aa8ff",
+    tinkerer: "#ef8a6b",
+    wanderer: "#7fd1c4",
+    bard: "#f2a3c8",
+  };
+
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    const page = document.querySelector<HTMLElement>("[data-ach-page]");
+    if (!page || page.dataset.ready) return;
+    page.dataset.ready = "1";
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const rows = [...page.querySelectorAll<HTMLElement>("[data-ach]")];
+
+    // Fill in what's been found (it lives in this browser).
+    const paint = () => {
+      const got = unlocked();
+      let n = 0;
+      rows.forEach(r => {
+        const when = got[r.dataset.ach!];
+        r.classList.toggle("is-on", !!when);
+        if (when) n++;
+        const d = r.querySelector<HTMLElement>("[data-date]")!;
+        // The date it was found (blank if it's missing or unreadable).
+        const date = when ? new Date(when) : null;
+        d.textContent =
+          date && !Number.isNaN(date.getTime())
+            ? date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+            : "";
+      });
+      page.querySelector("[data-found]")!.textContent = String(n);
+      page.querySelectorAll<HTMLElement>(".progress-bar span").forEach((b, i) => b.classList.toggle("on", i < n));
+      page.querySelector("[data-platinum]")!.classList.toggle("is-on", isPlatinum());
+      // Your class: a bar per class (five), and the one you lean towards.
+      const t = playerTypes();
+      page.querySelectorAll<HTMLElement>("[data-type]").forEach(li => {
+        const k = li.dataset.type as keyof typeof t;
+        li.querySelector<HTMLElement>(".types-bar span")!.style.width = `${(100 * t[k].got) / t[k].total}%`;
+        li.querySelector("[data-type-count]")!.textContent = `${t[k].got}/${t[k].total}`;
+      });
+      // The title: the platinum's, a dual class, or a single class.
+      const title = classTitle();
+      dress(title);
+      // The wardrobe (platinum only): the portrait wears the chosen look.
+      const wardrobe = page.querySelector<HTMLElement>("[data-wardrobe]")!;
+      wardrobe.hidden = !title?.plat;
+      page.querySelector<HTMLElement>("[data-wardrobe-keys]")!.hidden = !title?.plat;
+      if (title?.plat) wear(lookIndex());
+      // Found ones first, in the order they're listed; then the rest.
+      const list = page.querySelector("[data-ach-list]")!;
+      [...rows].sort((a, b) => Number(b.classList.contains("is-on")) - Number(a.classList.contains("is-on")))
+        .forEach(r => list.append(r));
+    };
+
+    // The wardrobe's looks: the Keeper first, then the five classes and the
+    // ten duals. The pick is saved as "classLook" (wiped by Reset).
+    type Look = NonNullable<ReturnType<typeof classTitle>>;
+    const LOOKS: (Look & { id: string })[] = [
+      { ...PLATINUM_CLASS, plat: true, id: "plat" },
+      ...(Object.keys(PLAYER_TYPES) as PlayerType[]).map(a => ({ ...PLAYER_TYPES[a], a, id: a })),
+      ...Object.entries(DUAL_CLASSES).map(([k, d]) => {
+        const [a, b] = k.split("+") as PlayerType[];
+        return { ...d, a, b, id: k };
+      }),
+    ];
+    function lookIndex() {
+      try {
+        return Math.max(0, LOOKS.findIndex(l => l.id === localStorage.getItem("classLook")));
+      } catch {
+        return 0;
+      }
+    }
+    function wear(i: number) {
+      const look = LOOKS[i];
+      dressPortrait(look);
+      page!.querySelector("[data-look-name]")!.textContent = look.name;
+      try {
+        if (i === 0) localStorage.removeItem("classLook");
+        else localStorage.setItem("classLook", look.id);
+      } catch {}
+    }
+    const cycle = (dir: number) => {
+      wear((lookIndex() + dir + LOOKS.length) % LOOKS.length);
+      if (soundOn()) sfx([dir > 0 ? 988 : 784], 0, 0.035);
+    };
+    page.querySelectorAll<HTMLButtonElement>("[data-look]").forEach(b =>
+      b.addEventListener("click", () => cycle(Number(b.dataset.look)), { signal })
+    );
+
+    // Put a class's name, blurb and portrait on the card.
+    function dress(title: ReturnType<typeof classTitle>) {
+      page!.querySelector("[data-main-type]")!.textContent = title ? title.name : "Not sure yet";
+      page!.querySelector("[data-main-blurb]")!.textContent = title
+        ? title.blurb
+        : "Find a few things and we'll see what you came here for.";
+      dressPortrait(title);
+    }
+    function dressPortrait(title: ReturnType<typeof classTitle>) {
+      // Dress the portrait: the robe in the main class's colour, the sash in
+      // the second's; the main prop in the right hand, the second in the
+      // left. The platinum is all gold; nothing found yet is a grey "?".
+      const portrait = page!.querySelector<HTMLElement>("[data-portrait]")!;
+      const colour = (k?: string) => (k ? CLASS_COLOURS[k] : undefined);
+      portrait.toggleAttribute("data-none", !title);
+      portrait.toggleAttribute("data-plat", !!title?.plat);
+      const robe = title?.plat ? "#ffd27a" : colour(title?.a) ?? "#7d82a8";
+      portrait.style.setProperty("--robe", robe);
+      portrait.style.setProperty("--shade", `color-mix(in srgb, ${robe} 62%, #07081a)`);
+      portrait.style.setProperty("--hood", `color-mix(in srgb, ${robe} 78%, #07081a)`);
+      portrait.style.setProperty("--trim", title?.plat ? "#fff1c4" : colour(title?.b) ?? `color-mix(in srgb, ${robe} 70%, #fff)`);
+      portrait.dataset.r = title?.plat ? "wanderer" : title?.a ?? "";
+      portrait.dataset.l = title?.b ?? "";
+    }
+    paint();
+    page.classList.add("is-ready"); // the list deals in (CSS)
+
+    // Coming in: the trophy case's glass door opens.
+    if (soundOn() && enteredFrom("/achievements")) trophyOpen();
+    // Leaving: the rows slide away as the screen fades, and the case
+    // closes.
+    document.addEventListener(
+      "sys:leaving",
+      () => {
+        page.classList.add("is-leaving");
+        if (soundOn()) trophyClose();
+      },
+      { signal }
+    );
+
+    // A menu: ↑/↓ (or the wheel) move the ▶ cursor.
+    let cur = 0;
+    const ordered = () => [...page.querySelectorAll<HTMLElement>("[data-ach]")];
+    const select = (i: number, focus = true) => {
+      const list = ordered();
+      cur = (i + list.length) % list.length;
+      list.forEach((r, k) => r.classList.toggle("is-active", k === cur));
+      if (focus) list[cur].focus({ preventScroll: false });
+    };
+    select(0, false);
+    ordered().forEach(r => {
+      r.addEventListener("pointerenter", () => select(ordered().indexOf(r), false), { signal });
+      r.addEventListener("focus", () => select(ordered().indexOf(r), false), { signal });
+    });
+    const confirm = page.querySelector<HTMLDialogElement>("[data-confirm]")!;
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented || confirm.open) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          select(cur + 1);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          select(cur - 1);
+        } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && isPlatinum()) {
+          // The wardrobe: try on the next look.
+          e.preventDefault();
+          cycle(e.key === "ArrowRight" ? 1 : -1);
+        } else if (e.key === "Enter") {
+          // Enter on a locked achievement: go to where it happens.
+          const go = ordered()[cur]?.querySelector<HTMLAnchorElement>(".go");
+          if (go && !ordered()[cur].classList.contains("is-on")) {
+            e.preventDefault();
+            go.click();
+          }
+        }
+      },
+      { signal }
+    );
+    wheelSelect(dir => select(cur + dir), signal, () => !confirm.open);
+
+    // Dev only: unlock everything at once (no toasts), then repaint.
+    if (import.meta.env.DEV) {
+      page.querySelector("[data-debug-all]")?.addEventListener(
+        "click",
+        () => {
+          const now = new Date().toISOString();
+          localStorage.setItem("achievements", JSON.stringify(Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, now]))));
+          paint();
+        },
+        { signal }
+      );
+    }
+
+    // Reset, behind a Yes/No box (arrows move, Enter picks).
+    const yes = confirm.querySelector<HTMLButtonElement>("[data-yes]")!;
+    const no = confirm.querySelector<HTMLButtonElement>("[data-no]")!;
+    page.querySelector("[data-reset]")!.addEventListener(
+      "click",
+      () => {
+        confirm.showModal();
+        if (soundOn()) sfx([659.25], 0, 0.04);
+      },
+      { signal }
+    );
+    no.addEventListener("click", () => confirm.close(), { signal });
+    yes.addEventListener(
+      "click",
+      () => {
+        reset();
+        confirm.close();
+        paint();
+        select(0, false);
+        if (soundOn()) sfx([659.25, 440], 0.1, 0.04);
+      },
+      { signal }
+    );
+    confirm.addEventListener(
+      "keydown",
+      e => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+        e.preventDefault();
+        (document.activeElement === yes ? no : yes).focus();
+        if (soundOn()) sfx([880], 0, 0.03);
+      },
+      { signal }
+    );
+    confirm.addEventListener("click", e => e.target === confirm && confirm.close(), { signal });
+
+    // Another tab (or page) unlocked something: keep up.
+    document.addEventListener("ach:unlock", paint, { signal });
+    void ACHIEVEMENTS;
+    void reduce;
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  .ach-page {
+    --amber: #ffd27a;
+    --dusk: #9aa0d6;
+    --moon: #efecdc;
+  }
+
+  /* ── progress ──────────────────────────────────────────────── */
+  .progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.2rem;
+    margin: 0.5rem 0 1.5rem;
+    font-family: var(--font-pixel), monospace;
+    font-variant-ligatures: none;
+  }
+  .progress-count {
+    margin: 0;
+    color: var(--moon);
+    font-size: 1rem;
+  }
+  .progress-count span {
+    color: var(--amber);
+  }
+  .progress-bar {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border: 2px solid rgb(154 160 214 / 0.45);
+  }
+  .progress-bar span {
+    width: 8px;
+    height: 12px;
+    background: rgb(154 160 214 / 0.15);
+  }
+  .progress-bar span:global(.on) {
+    background: var(--amber);
+  }
+
+  /* ── your class ─────────────────────────────────────────────── */
+  /* Text and bars on the left, the portrait on the right. */
+  .types {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 9rem;
+    gap: 1.25rem;
+    align-items: center;
+    margin: 0 0 1.5rem;
+    padding: 0.9rem 1.1rem;
+    border: 3px solid rgb(154 160 214 / 0.35);
+    border-radius: 6px;
+    background: rgb(12 14 42 / 0.5);
+    font-family: var(--font-pixel), monospace;
+    font-variant-ligatures: none;
+  }
+  /* The wardrobe (platinum only): ◀ look name ▶ under the portrait. */
+  .types-portrait {
+    display: grid;
+    gap: 0.45rem;
+  }
+  .wardrobe {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .wardrobe[hidden] {
+    display: none;
+  }
+  .wr-name {
+    color: #ffd27a;
+    font-size: 0.62rem;
+    line-height: 1.3;
+    text-align: center;
+    /* Room for two lines, so a long name doesn't make the card jump. */
+    min-height: 2.6em;
+    display: grid;
+    place-items: center;
+  }
+  .wr-btn {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 2px solid rgb(255 210 122 / 0.45);
+    border-radius: 3px;
+    background: rgb(5 6 20 / 0.5);
+    color: #ffd27a;
+    font-size: 0.6rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .wr-btn:hover,
+  .wr-btn:focus-visible {
+    outline: none;
+    border-color: #ffd27a;
+    background: rgb(255 210 122 / 0.15);
+  }
+  /* Shorter bars (so the portrait has room). */
+  .types-bars {
+    max-width: 24rem;
+  }
+  @media (max-width: 640px) {
+    .types {
+      grid-template-columns: minmax(0, 1fr) 6.5rem;
+      gap: 0.9rem;
+    }
+  }
+  .types-main {
+    margin: 0;
+    color: var(--moon);
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .types-kicker {
+    margin-right: 0.5rem;
+    color: var(--dusk);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .types-blurb {
+    margin: 0.3rem 0 0.8rem;
+    color: rgb(239 236 220 / 0.75);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.92rem;
+  }
+  .types-bars {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .types-bars li {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr) 2.5rem;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+  }
+  .types-name {
+    color: var(--dusk);
+  }
+  .types-bar {
+    height: 10px;
+    border: 2px solid rgb(154 160 214 / 0.45);
+  }
+  .types-bar span {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: var(--c, var(--amber));
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .types-count {
+    color: var(--moon);
+    text-align: right;
+  }
+  /* A colour per class, on the bars and the tags. */
+  [data-type="scholar"],
+  .t-scholar {
+    --c: #ffd27a;
+  }
+  [data-type="gamer"],
+  .t-gamer {
+    --c: #9aa8ff;
+  }
+  [data-type="tinkerer"],
+  .t-tinkerer {
+    --c: #ef8a6b;
+  }
+  [data-type="wanderer"],
+  .t-wanderer {
+    --c: #7fd1c4;
+  }
+  [data-type="bard"],
+  .t-bard {
+    --c: #f2a3c8;
+  }
+  .ach-type {
+    display: inline-block;
+    margin-left: 0.6rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--c);
+    border-radius: 3px;
+    color: var(--c);
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: none;
+    vertical-align: middle;
+  }
+  /* "Go ▶": straight to where a locked achievement happens (found ones
+     don't need it). Enter on a selected row follows it too. */
+  .go {
+    padding: 0.3rem 0.6rem;
+    border: 2px solid rgb(154 160 214 / 0.45);
+    border-radius: 3px;
+    color: var(--dusk) !important;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .go:hover,
+  .ach:global(.is-active) .go {
+    border-color: var(--amber);
+    color: var(--amber) !important;
+  }
+  .ach:global(.is-on) .go {
+    display: none;
+  }
+  .ach:has(.go) {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  @media (max-width: 640px) {
+    .ach:has(.go) {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .go {
+      grid-column: 2;
+      justify-self: start;
+    }
+  }
+  .credits-link {
+    color: var(--amber) !important;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ── the windows (platinum + each achievement) ─────────────── */
+  .platinum,
+  .ach {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1.1rem;
+    border: 3px solid rgb(154 160 214 / 0.35);
+    border-radius: 6px;
+    background: linear-gradient(180deg, rgb(32 38 104 / 0.55), rgb(14 17 56 / 0.55));
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.7),
+      5px 5px 0 rgb(3 4 14 / 0.7);
+  }
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 3px;
+    background: rgb(5 6 20 / 0.6);
+    color: rgb(154 160 214 / 0.55);
+  }
+  .icon :global(svg) {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+  .text {
+    min-width: 0;
+  }
+  .title {
+    margin: 0;
+    color: var(--moon);
+    font-family: var(--font-pixel), monospace;
+    font-size: 1.1rem;
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.25;
+    text-shadow: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+  }
+  .desc {
+    margin: 0.25rem 0 0;
+    color: rgb(239 236 220 / 0.75);
+    font-size: 0.92rem;
+  }
+  .date {
+    color: var(--dusk);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  /* Locked vs found: each row carries both texts; one shows. */
+  .when-on {
+    display: none;
+  }
+  :global(.is-on) > .text .when-on,
+  :global(.is-on) > .text > .title .when-on,
+  :global(.is-on) > .text > .desc .when-on {
+    display: inline;
+  }
+  :global(.is-on) > .text .when-off {
+    display: none;
+  }
+  /* (The icons are another component's elements: reached with :global.) */
+  .icon :global(.ic-on) {
+    display: none;
+  }
+  .ach:global(.is-on) .icon :global(.ic-on) {
+    display: block;
+  }
+  .ach:global(.is-on) .icon :global(.ic-off) {
+    display: none;
+  }
+  /* Found: the icon lights up amber. */
+  .ach:global(.is-on) .icon {
+    background: var(--amber);
+    color: #07081a;
+  }
+  /* Locked: dim, the hint in italics. */
+  .ach:not(:global(.is-on)) {
+    border-style: dashed;
+    background: rgb(12 14 42 / 0.5);
+  }
+  .ach:not(:global(.is-on)) .title {
+    color: rgb(239 236 220 / 0.55);
+  }
+  .ach:not(:global(.is-on)) .desc {
+    color: var(--dusk);
+    font-style: italic;
+  }
+
+  /* The platinum: gold once earned. */
+  .platinum {
+    margin-bottom: 1.5rem;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .platinum .kicker {
+    margin: 0 0 0.15rem;
+    color: var(--dusk);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .platinum:not(:global(.is-on)) {
+    border-style: dashed;
+    background: rgb(12 14 42 / 0.5);
+  }
+  .platinum:global(.is-on) {
+    border-color: var(--amber);
+    background: linear-gradient(180deg, #4a3a12, #2a1f08);
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.5),
+      5px 5px 0 rgb(3 4 14 / 0.7),
+      0 0 28px rgb(255 210 122 / 0.3);
+  }
+  .platinum:global(.is-on) .icon {
+    background: linear-gradient(180deg, #fff1c4, var(--amber));
+    color: #3a2a06;
+  }
+  .platinum:global(.is-on) .kicker {
+    color: var(--amber);
+  }
+
+  /* ── the list ──────────────────────────────────────────────── */
+  .list {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .ach {
+    outline: none;
+    transition:
+      border-color 0.15s,
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .cursor {
+    position: absolute;
+    top: 50%;
+    left: -1.5rem;
+    color: var(--amber);
+    font-size: 0.85rem;
+    opacity: 0;
+    transform: translateY(-50%);
+    transition: opacity 0.15s;
+  }
+  .ach:global(.is-active) {
+    border-color: var(--amber);
+    transform: translateX(6px);
+  }
+  .ach:global(.is-active) .cursor {
+    opacity: 1;
+  }
+  @media (max-width: 640px) {
+    .cursor {
+      display: none;
+    }
+    .ach:global(.is-active) {
+      transform: none;
+    }
+    .platinum,
+    .ach {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .date {
+      grid-column: 2;
+    }
+  }
+
+  /* ── coming in: the list deals in, one row after another ───── */
+  .platinum,
+  .ach {
+    opacity: 0;
+  }
+  .ach-page:global(.is-ready) .platinum,
+  .ach-page:global(.is-ready) .ach {
+    animation: deal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .ach-page:global(.is-ready) .ach:nth-child(1) { animation-delay: 0.08s; }
+  .ach-page:global(.is-ready) .ach:nth-child(2) { animation-delay: 0.12s; }
+  .ach-page:global(.is-ready) .ach:nth-child(3) { animation-delay: 0.16s; }
+  .ach-page:global(.is-ready) .ach:nth-child(4) { animation-delay: 0.2s; }
+  .ach-page:global(.is-ready) .ach:nth-child(5) { animation-delay: 0.24s; }
+  .ach-page:global(.is-ready) .ach:nth-child(6) { animation-delay: 0.28s; }
+  .ach-page:global(.is-ready) .ach:nth-child(n + 7) { animation-delay: 0.32s; }
+  @keyframes deal {
+    from {
+      opacity: 0;
+      transform: translate(-18px, 6px) rotate(-1deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  /* The bar fills in, block by block. */
+  .ach-page:global(.is-ready) .progress-bar span:global(.on) {
+    animation: block-on 0.3s steps(1) backwards;
+  }
+  .progress-bar span:nth-child(1) { animation-delay: 0.2s !important; }
+  .progress-bar span:nth-child(2) { animation-delay: 0.25s !important; }
+  .progress-bar span:nth-child(3) { animation-delay: 0.3s !important; }
+  .progress-bar span:nth-child(4) { animation-delay: 0.35s !important; }
+  .progress-bar span:nth-child(5) { animation-delay: 0.4s !important; }
+  .progress-bar span:nth-child(6) { animation-delay: 0.45s !important; }
+  .progress-bar span:nth-child(7) { animation-delay: 0.5s !important; }
+  .progress-bar span:nth-child(8) { animation-delay: 0.55s !important; }
+  .progress-bar span:nth-child(9) { animation-delay: 0.6s !important; }
+  .progress-bar span:nth-child(10) { animation-delay: 0.65s !important; }
+  .progress-bar span:nth-child(n + 11) { animation-delay: 0.7s !important; }
+  @keyframes block-on {
+    from {
+      background: rgb(154 160 214 / 0.15);
+    }
+  }
+
+  /* ── leaving: the rows slide away to the right ─────────────── */
+  .ach-page:global(.is-leaving) .platinum,
+  .ach-page:global(.is-leaving) .ach {
+    animation: none;
+    opacity: 1;
+    transform: translateX(40px);
+    opacity: 0;
+    transition:
+      transform 0.32s cubic-bezier(0.55, 0, 0.75, 0.2),
+      opacity 0.32s ease-in;
+  }
+
+  /* ── foot: key hints and reset ─────────────────────────────── */
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+  .keys {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    color: var(--dusk);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.8rem;
+  }
+  /* The wardrobe's keys (platinum only), spaced like the rest. */
+  .wr-keys:not([hidden]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: 0.4rem;
+  }
+  .keys kbd {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.8rem;
+    height: 1.45rem;
+    padding: 0 0.35rem;
+    border: 2px solid rgb(154 160 214 / 0.5);
+    border-bottom-width: 3px;
+    border-radius: 3px;
+    color: var(--moon);
+    font-family: inherit;
+    font-size: 0.7rem;
+  }
+  @media (hover: none) {
+    .keys {
+      display: none;
+    }
+  }
+  .reset {
+    padding: 0.35rem 0.6rem;
+    border: 2px dashed rgb(154 160 214 / 0.35);
+    border-radius: 3px;
+    background: none;
+    color: var(--dusk);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  /* Dev only. */
+  .reset.debug {
+    border-color: #ef8a6b;
+    color: #ef8a6b;
+  }
+  .reset:hover,
+  .reset:focus-visible {
+    outline: none;
+    border-color: #e5735f;
+    color: #e5735f;
+  }
+
+  /* ── reset confirmation (like the quit box) ────────────────── */
+  .confirm {
+    width: min(24rem, calc(100vw - 2.5rem));
+    margin: auto;
+    padding: 1.4rem 1.4rem 1.2rem;
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background: #0c0e2a;
+    color: var(--moon);
+    font-family: var(--font-pixel), monospace;
+    box-shadow:
+      6px 6px 0 rgb(3 4 14 / 0.9),
+      0 30px 80px -20px rgb(0 0 0 / 0.8);
+  }
+  .confirm::backdrop {
+    background: rgb(0 0 0 / 0.6);
+    backdrop-filter: blur(3px);
+  }
+  .confirm-kicker {
+    margin: 0;
+    color: var(--amber);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .confirm-title {
+    margin: 0.35rem 0 0;
+    font-size: 1.3rem;
+  }
+  .confirm-line {
+    margin: 0.5rem 0 0;
+    color: rgb(239 236 220 / 0.75);
+  }
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.2rem;
+  }
+  .confirm-btn {
+    position: relative;
+    min-width: 5.5rem;
+    min-height: 44px;
+    padding: 0 1rem;
+    border: 2px solid rgb(154 160 214 / 0.4);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--moon);
+    font: inherit;
+    cursor: pointer;
+  }
+  .confirm-btn:hover,
+  .confirm-btn:focus {
+    outline: none;
+    border-color: var(--moon);
+  }
+  .confirm-btn:focus::before {
+    content: "▶";
+    position: absolute;
+    left: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--amber);
+    font-size: 0.6rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .platinum,
+    .ach {
+      opacity: 1;
+      animation: none !important;
+    }
+    .progress-bar span {
+      animation: none !important;
+    }
+  }
+</style>

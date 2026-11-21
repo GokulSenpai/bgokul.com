@@ -1,0 +1,256 @@
+---
+/**
+ * Live rail-fence cipher, ported 1:1 from LAIN's Fence.cs (same zigzag walk,
+ * same decode-by-track-length). Type a message and see the rails, the
+ * encrypted output, and what the wrong key gives you.
+ */
+interface Props {
+  rails?: number;
+  text?: string;
+  fileName?: string;
+}
+
+const { rails = 7, text = "dear diary, nobody can read this", fileName = "1.love" } =
+  Astro.props;
+---
+
+<div class="rf" data-rf data-rails={rails} data-file={fileName}>
+  <label class="rf-label" for="rf-input">Type something to encrypt:</label>
+  <p class="rf-inputline">
+    <span class="cmd-dim" aria-hidden="true">&gt; </span><input
+      id="rf-input"
+      class="rf-input"
+      data-rf-input
+      type="text"
+      maxlength="48"
+      value={text}
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+    />
+  </p>
+  <p class="rf-rails">
+    <span>Rails (the key):</span>
+    <button type="button" data-rf-dec aria-label="Fewer rails">[-]</button>
+    <output data-rf-count aria-live="polite">{rails}</output>
+    <button type="button" data-rf-inc aria-label="More rails">[+]</button>
+  </p>
+
+  <div class="rf-grid-wrap">
+    <pre class="rf-grid" data-rf-grid aria-label="The message written in a zigzag across the rails"></pre>
+  </div>
+
+  <dl class="rf-out">
+    <div>
+      <dt>Saved as <span data-rf-file>{fileName}</span>:</dt>
+      <dd class="rf-cipher" data-rf-cipher></dd>
+    </div>
+    <div>
+      <dt>Decoded, <span data-rf-right></span> rails:</dt>
+      <dd data-rf-ok></dd>
+    </div>
+    <div>
+      <dt>Decoded, <span data-rf-wrong></span> rails:</dt>
+      <dd class="cmd-dim" data-rf-bad></dd>
+    </div>
+  </dl>
+</div>
+
+<script>
+  // ── Fence.cs, in TypeScript ────────────────────────────────────────────
+  // Walk down the rails and back up, one character per step.
+  function railPattern(length: number, rails: number): number[] {
+    const rows: number[] = [];
+    let track = 0;
+    let direction = 1;
+    let count = 0;
+    for (let i = 0; i < length; i++) {
+      rows.push(track);
+      track += direction;
+      count++;
+      if (count === rails - 1) {
+        direction *= -1;
+        count = 0;
+      }
+    }
+    return rows;
+  }
+
+  function encode(input: string, rails: number): string {
+    const out: string[] = Array(rails).fill("");
+    railPattern(input.length, rails).forEach((r, i) => (out[r] += input[i]));
+    return out.join("");
+  }
+
+  function decode(input: string, rails: number): string {
+    const pattern = railPattern(input.length, rails);
+    const lengths = Array(rails).fill(0);
+    pattern.forEach(r => lengths[r]++);
+    const tracks: string[] = [];
+    let cur = 0;
+    for (const len of lengths) {
+      tracks.push(input.slice(cur, cur + len));
+      cur += len;
+    }
+    return pattern
+      .map(r => {
+        const ch = tracks[r][0];
+        tracks[r] = tracks[r].slice(1);
+        return ch;
+      })
+      .join("");
+  }
+
+  // ── UI ─────────────────────────────────────────────────────────────────
+  const esc = (s: string) =>
+    s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+  function initRailFence() {
+    document.querySelectorAll<HTMLElement>("[data-rf]").forEach(root => {
+      if (root.dataset.rfInit) return;
+      root.dataset.rfInit = "true";
+
+      const input = root.querySelector<HTMLInputElement>("[data-rf-input]")!;
+      const $ = (sel: string) => root.querySelector<HTMLElement>(sel)!;
+      let rails = Number(root.dataset.rails) || 7;
+
+      const render = () => {
+        const text = input.value;
+        const pattern = railPattern(text.length, rails);
+        const cipher = encode(text, rails);
+        const wrong = rails > 2 ? rails - 1 : rails + 1;
+
+        // One line per rail; the message's letters sit on their rail, dots
+        // fill the gaps. Spaces show as "_" so the zigzag stays visible.
+        const lines: string[] = [];
+        for (let r = 0; r < rails; r++) {
+          let line = "";
+          for (let i = 0; i < text.length; i++) {
+            line +=
+              pattern[i] === r
+                ? `<b>${text[i] === " " ? "_" : esc(text[i])}</b>`
+                : `<i>.</i>`;
+          }
+          lines.push(line);
+        }
+        $("[data-rf-grid]").innerHTML = text ? lines.join("\n") : "<i>(nothing to encrypt yet)</i>";
+        $("[data-rf-count]").textContent = String(rails);
+        $("[data-rf-cipher]").textContent = `"${cipher}"`;
+        $("[data-rf-right]").textContent = String(rails);
+        $("[data-rf-ok]").textContent = decode(cipher, rails);
+        $("[data-rf-wrong]").textContent = `${wrong} (wrong key)`;
+        $("[data-rf-bad]").textContent = decode(cipher, wrong);
+      };
+
+      input.addEventListener("input", render);
+      $("[data-rf-dec]").addEventListener("click", () => {
+        rails = Math.max(2, rails - 1);
+        render();
+      });
+      $("[data-rf-inc]").addEventListener("click", () => {
+        rails = Math.min(8, rails + 1);
+        render();
+      });
+      render();
+    });
+  }
+
+  initRailFence();
+  document.addEventListener("astro:page-load", initRailFence);
+</script>
+
+<style>
+  .rf {
+    max-width: 72ch;
+  }
+  .rf-label {
+    display: block;
+  }
+  .rf-inputline {
+    display: flex;
+    align-items: baseline;
+    margin-top: 0.25em !important;
+    padding: 0.35em 0.75ch;
+    border: 1px dashed var(--cmd-faint);
+  }
+  .rf-inputline:focus-within {
+    border-color: var(--cmd-hl);
+  }
+  .rf-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--cmd-bright);
+    font: inherit;
+    caret-color: var(--cmd-hl);
+    caret-shape: underscore;
+    outline: none !important;
+  }
+  .rf-rails {
+    display: flex;
+    align-items: baseline;
+    gap: 1ch;
+    margin-top: 0.75em !important;
+  }
+  .rf-rails button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--cmd-hl);
+    font: inherit;
+    cursor: pointer;
+  }
+  .rf-rails button:hover {
+    background: var(--cmd-hl);
+    color: var(--cmd-bg);
+  }
+  .rf-rails output {
+    min-width: 1ch;
+    color: var(--cmd-bright);
+  }
+
+  .rf-grid-wrap {
+    margin-top: 1em;
+    overflow-x: auto;
+  }
+  .rf-grid {
+    margin: 0;
+    font: inherit;
+    line-height: 1.35;
+  }
+  .rf-grid :global(b) {
+    font-weight: 400;
+    color: var(--cmd-hl);
+  }
+  .rf-grid :global(i) {
+    font-style: normal;
+    color: var(--cmd-faint);
+  }
+
+  .rf-out {
+    margin: 1em 0 0;
+  }
+  .rf-out > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 0.4em;
+  }
+  @media (min-width: 640px) {
+    .rf-out > div {
+      grid-template-columns: 30ch minmax(0, 1fr);
+    }
+  }
+  .rf-out dt {
+    color: var(--cmd-dim);
+  }
+  .rf-out dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  .rf-cipher {
+    color: var(--cmd-bright);
+  }
+</style>

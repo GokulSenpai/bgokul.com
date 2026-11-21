@@ -1,0 +1,75 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Notebook from "@/components/journal/Notebook.astro";
+import JournalEntry from "@/components/journal/JournalEntry.astro";
+import { postFilter } from "@/utils/postFilter";
+import { getSortedPosts } from "@/utils/getSortedPosts";
+import config from "@/config";
+
+const locale = Astro.currentLocale ?? config.site.lang;
+
+// 404 if archives are switched off in the config.
+const notFoundUrl = getRelativeLocaleUrl(locale, "404");
+if (!config.features.showArchives && notFoundUrl) {
+  return Astro.rewrite(notFoundUrl);
+}
+
+const posts = getSortedPosts((await getCollection("posts")).filter(postFilter));
+const monthName = new Intl.DateTimeFormat("en-GB", { month: "long" });
+
+// Year → month → entries, newest first.
+const years = new Map<number, Map<number, typeof posts>>();
+for (const p of posts) {
+  const d = p.data.pubDatetime;
+  const y = years.get(d.getFullYear()) ?? new Map();
+  y.set(d.getMonth(), [...(y.get(d.getMonth()) ?? []), p]);
+  years.set(d.getFullYear(), y);
+}
+---
+
+<Layout title={`Archives | ${config.site.title}`}>
+  <Header />
+
+  <Notebook title="Archives" kicker="By year and month" desc="Every entry, filed by when it was written.">
+    {
+      [...years].map(([year, months]) => (
+        <section class="nb-year">
+          <h2 class="nb-year-title">
+            {year} <span class="nb-note">{[...months.values()].flat().length} entries</span>
+          </h2>
+          {[...months].map(([m, list]) => (
+            <>
+              <p class="nb-section">{monthName.format(new Date(2000, m, 1))}</p>
+              <ul class="nb-entries">
+                {list.map(p => (
+                  <JournalEntry post={p} />
+                ))}
+              </ul>
+            </>
+          ))}
+        </section>
+      ))
+    }
+  </Notebook>
+
+  <Footer />
+</Layout>
+
+<style>
+  .nb-year + .nb-year {
+    margin-top: 2.5rem;
+  }
+  .nb-year-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 0;
+    font-family: var(--font-pixel), monospace;
+    font-size: 1.6rem;
+    font-variant-ligatures: none;
+  }
+</style>

@@ -1,0 +1,136 @@
+---
+title: 6 Bullets
+tagline: A tense western standoff game where you read your enemy's tells, and draw at the right moment.
+year: 2025
+role: Solo developer (prototype)
+tools: ['Godot']
+accentColor: '#8b5a2b'
+cover: ./cover.webp
+embedUrl: 'https://itch.io/embed-upload/20586228?color=333333'
+order: 2
+---
+
+## Table of contents
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Hold LMB | Keep your hand on the holster |
+| Press LMB | Draw |
+
+- **Hold your hand on the holster.** When you're ready to shoot, you'll hear a click from the gun. If your hand isn't near the holster when you try to shoot, your accuracy drops based on how far away it is.
+- **Watch the enemy's hand.** When you feel he's about to shoot, press LMB to draw.
+- **Aim for a vital.** During the slow-motion aiming phase, target one of his vital parts: the head or the heart.
+- **LMB to shoot him before he shoots you.** If you pull the trigger early, it's a foul, and the enemy shoots and kills you for it.
+- **Observation is key. Click.**
+- The game has a debug mode to skip to an encounter. Right click on any number at the bottom to skip to that encounter.
+
+---
+
+## The idea
+
+6 Bullets started as a scene.
+
+I had a standoff in my head: two men walking to the spot, never taking their eyes off each other, pulling back their coats, fingers twitching just above the holster.
+I wanted to find out whether a game could make the player feel that moment.
+
+---
+
+## Studying how other games handle the draw
+
+Before designing my own standoff, I played and broke down how two other games handle the draw.
+
+**Call of Juarez: Bound in Blood** makes the draw physical. You move your hand toward the gun with the mouse while sidestepping to keep a moving enemy centered on screen. When the bell rings, one fast mouse movement toward the holster decides who draws first, and then you wait for the reticle to land on your opponent before firing.
+
+**Call of Juarez: Gunslinger** splits the draw across two inputs: one stick controls your hand and the other your focus, which slowly zooms in on the enemy. Some enemies keep moving to break your focus, so you have to keep repositioning. Your breathing gives way to a heartbeat as focus peaks, and time slows once the shooting starts. It also has an honor rule: you're meant to let the enemy reach for his gun first.
+
+Between them, these games gave me the range I was working within: the physical feel of the hand, the tension of focus, and the mind games of the false draw.
+
+But what was missing from all of them was reading the man in front of you.
+
+---
+
+## Reading, not reacting
+
+The core mechanic became a standoff built around observation. Two men face each other, and the player watches the enemy for tells: a hand moving, a sudden stillness, a shift in stance. From those tells the player builds a prediction and commits to a draw at the moment they think is right.
+
+Draw too early and you miss. Draw too late and you die. The skill is in reading the enemy.
+
+> [!TIP] Design principle
+> Each enemy has a unique tell pattern, and the player learns it through repetition. A tell should come from the enemy's personality, so learning how he draws is also learning who he is.
+
+---
+
+## Hold, click, or slide
+
+I tested a few different ways of interacting with the draw before settling on one.
+
+**Hold.** The player has to actively hold LMB to keep their hand on the holster. This was my way of keeping them actively engaged throughout the standoff, so the tension sits in their hand the whole time.
+
+**Click.** The player just clicks at the right moment to shoot. After some playtesting, this turned out to be a reflex test, which wasn't the experience I was going for.
+
+**Slide.** The player slides the mouse from right to left and holds it there to stay on the holster. This wasn't well received either. Mouse sensitivity varies a lot across devices, which made the input inconsistent and not an ideal way to interact.
+
+ Hold made it into the game. If you want to test out the other modes of interaction, they are hidden across the game. Find them!
+
+---
+
+## Six enemies, six bullets
+
+There are six enemies and six bullets.
+
+- **Linear** with no branching paths.
+- **No saves.** If you die, you start again from the beginning.
+
+Death didn't need to feel like failure, so the death screens speak in the protagonist's voice. They're cold and declarative, more certainty than desperation: *"As many times as it takes."*
+
+---
+
+## A trail of broken memories
+
+The narrative was built around what the protagonist doesn't remember.
+
+At the start he has a single memory, the last thing he saw before losing consciousness: a worn cowboy boot on a man's left leg, with a bullet hole through it. That boot is the first enemy.
+
+Each kill unlocks a memory fragment that points to the next man. The enemies aren't arranged in a hierarchy, either. They form a trail of broken memories that leads back to the source. The final enemy is the one who gave the order, someone the protagonist had no memory of until the very end.
+
+---
+
+## The protagonist
+
+The player fantasy is cold, necessary revenge. It isn't tortured and it isn't redemptive. The world is better off without these men, and the protagonist is simply the consequence.
+
+He lost everything in a single event: his wife, his daughter, his whole family. That loss emptied him, and that emptiness is where his strength comes from. He learned to shoot because he had to. His skill progression is his transformation.
+
+The game was meant to open with slice-of-life gameplay: the family, the home, the ordinary. Then the event happens, and the real game begins.
+
+---
+
+## The hip
+
+The camera sits at the player's hip, with the player's side on the left and the enemy straight ahead on the right. Keeping both men in the same frame was essential to the tension.
+
+---
+
+## Where it ended up
+
+Partway through planning, I realized there wasn't really a story here yet. I had a strong opening scene, a revenge structure, and a protagonist I understood, but the six men and what happened that day were still empty spaces.
+
+What I'd actually been doing was experimenting with enemy designs: who each man could be, how he might stand, and what his tell would look like. The project also turned into a drawing exercise for me. Everything in it is hand drawn from references.
+
+---
+
+## What I learned
+
+Starting from a cinematic scene gave the project a very clear mood, but a scene isn't a game. Studying how other games handle the draw showed me how many different things a standoff can test, like physical control, focus, or pure reflex. That's what pushed me toward building mine around reading the opponent.
+
+> [!NOTE] The biggest lesson
+> Shifting my focus to what I could make the enemy do, and how that affects what the player feels, was eye-opening. Playing with all the variables that change how each encounter works was really fun!
+
+---
+
+## Project context
+
+> [!INFO] Design and drawing experiment
+> 6 Bullets was a personal concept exploring standoff mechanics, enemy tells, and memory-driven revenge in a western setting. It ended as a series of enemy design experiments and a hand-drawing exercise, with all artwork drawn from references.

@@ -1,0 +1,44 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Notebook from "@/components/journal/Notebook.astro";
+import { getUniqueTags } from "@/utils/getUniqueTags";
+import { slugifyAll } from "@/utils/slugify";
+import config from "@/config";
+
+const posts = await getCollection("posts", ({ data }) => !data.draft);
+const tags = getUniqueTags(posts).map(t => ({
+  ...t,
+  n: posts.filter(p => slugifyAll(p.data.tags).includes(t.tag)).length,
+}));
+---
+
+<Layout title={`Tags | ${config.site.title}`}>
+  <Header />
+
+  <Notebook title="Tags" kicker="Every topic, circled" desc="What the entries are about. Pick one to see them all.">
+    <ul class="nb-tags nb-tags--big">
+      {
+        tags.map(({ tag, tagName, n }) => (
+          <li>
+            <a class="nb-tag" href={`/tags/${tag}/`}>
+              #{tagName}
+              <span class="n">{n}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </Notebook>
+
+  <Footer />
+</Layout>
+
+<style>
+  .nb-tags--big :global(.nb-tag) {
+    padding: 0.3rem 0.9rem;
+    font-size: 1.05rem;
+  }
+</style>

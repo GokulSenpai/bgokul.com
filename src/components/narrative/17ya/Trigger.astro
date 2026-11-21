@@ -1,0 +1,119 @@
+---
+/**
+ * The ending, behind the game's last prompt. A native <details>, so it opens
+ * without JS too; with JS, opening it cuts the screen to black for a beat
+ * first, like the game does.
+ */
+interface Props {
+  prompt?: string;
+}
+const { prompt = "Shoot." } = Astro.props;
+---
+
+<details class="trigger" data-trigger>
+  <summary>
+    <span class="t-label">Spoilers: the ending</span>
+    <span class="t-prompt">{prompt}</span>
+  </summary>
+  <div class="t-body">
+    <slot />
+  </div>
+</details>
+<div class="blackout" aria-hidden="true" data-blackout></div>
+
+<script>
+  function initTrigger() {
+    document.querySelectorAll<HTMLDetailsElement>("[data-trigger]").forEach(d => {
+      if (d.dataset.init) return;
+      d.dataset.init = "true";
+      const black = d.nextElementSibling as HTMLElement | null;
+      const summary = d.querySelector("summary")!;
+      // However it opens (click, keyboard, reduced motion, no blackout),
+      // tell the page the trigger was pulled. The background clock breaks.
+      d.addEventListener("toggle", () => {
+        if (d.open) document.dispatchEvent(new CustomEvent("17ya:trigger"));
+      });
+      summary.addEventListener("click", e => {
+        if (d.open || matchMedia("(prefers-reduced-motion: reduce)").matches || !black) return;
+        e.preventDefault();
+        black.classList.add("on");
+        setTimeout(() => {
+          d.open = true;
+          black.classList.remove("on");
+        }, 900);
+      });
+    });
+  }
+  initTrigger();
+  document.addEventListener("astro:page-load", initTrigger);
+</script>
+
+<style>
+  .trigger {
+    margin: 3rem 0;
+  }
+  summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2rem 1rem;
+    border: 1px solid rgb(180 74 56 / 0.35);
+    list-style: none;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary:hover {
+    background: rgb(180 74 56 / 0.08);
+  }
+  .t-label {
+    font-family: var(--font-google-sans-code), ui-monospace, monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #b44a38;
+  }
+  .t-prompt {
+    font-family: var(--nv-display);
+    font-size: 1.8em;
+    font-weight: 500;
+    color: #f0ead8;
+  }
+  .trigger[open] summary {
+    display: none;
+  }
+  .t-body {
+    animation: t-in 1.2s ease both;
+  }
+  .t-body > :global(p) {
+    margin: 0 0 1.1em;
+    text-indent: 0;
+  }
+  @keyframes t-in {
+    from {
+      opacity: 0;
+    }
+  }
+  .blackout {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s;
+  }
+  .blackout.on {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .t-body {
+      animation: none;
+    }
+  }
+</style>

@@ -1,0 +1,41 @@
+---
+title: LAIN
+kind: App
+year: 2021
+tagline: A **password-locked** diary that saves every entry encrypted with a **rail-fence cipher**.
+demo: rail-fence
+repoUrl: https://github.com/GokulSenpai/Lain/tree/UI
+order: 2
+color: light-purple
+tools: ['Unity', 'C#', 'TextMeshPro', 'Android']
+features:
+  - name: Password lock
+    items:
+      - Set on first launch
+      - Checked every time it opens
+  - name: Rail-fence cipher
+    items:
+      - Hand-written encode and decode
+      - The number of rails is the key
+  - name: Encrypted entries
+    items:
+      - One file per entry
+      - Custom file extension (.love)
+      - Decodable without the app, given the key
+  - Glitch effect on the title
+  - UI moves up for the on-screen keyboard
+---
+
+## Overview
+
+LAIN is a personal diary app I made for myself. It's locked behind a password, and every entry is written to disk encrypted with a rail-fence cipher.
+
+## How it works
+
+On first launch you set a password, and after that it's checked every time the diary opens. Each entry's title and body are joined into one string and encoded before being saved to their own file.
+
+The cipher writes the text in a zigzag across a set number of rails, then reads the rails off one after another. Decoding works out how many characters landed on each rail, cuts the text back into rails, and walks the same zigzag to put it back in order.
+
+The rail count is the key. LAIN uses 7, and anything else gives you garbage (try it above).
+
+Entries aren't saved as .txt. The save folder and file extension are both set in the Inspector, and mine save as `.love`. Since the cipher is the only lock on the file, losing the app doesn't mean losing the diary: with the file and the key, it can still be decoded.

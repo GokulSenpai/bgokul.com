@@ -1,0 +1,179 @@
+---
+/**
+ * The Slender breakdown's ending, after the write-up (so it never
+ * interrupts the reading): a black end card with "8/8" on a page.
+ *
+ * In the game, collecting all eight pages doesn't save you. So when the
+ * card comes fully into view, he's there: one hard frame of the figure
+ * (~150ms) with a spike of static and a thud, then a cut to black, and
+ * the card reads "You collected all 8 pages."
+ *
+ * Care taken:
+ * - One flash only (repeated flashing is the photosensitivity risk).
+ * - The thud only if site sound is on and the visitor has clicked or
+ *   pressed something (scrolling doesn't count; then it's silent).
+ * - Once per page view: scrolling back up and down again won't repeat it,
+ *   but coming back to the page later plays it again.
+ * - Reduced motion: no scare, just the card.
+ * - Fires once 60% of the card is in view (so short screens get it too).
+ */
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+  figure: ImageMetadata;
+  total: number;
+}
+const { figure, total } = Astro.props;
+---
+
+<section class="sl-end" data-sl-end aria-label="The end">
+  <p class="sl-end-page" aria-hidden="true">{total}/{total}</p>
+  <p class="sl-end-line">You collected all {total} pages.</p>
+</section>
+
+<div class="sl-scare" data-sl-scare aria-hidden="true">
+  <Image src={figure} alt="" widths={[760]} sizes="100vw" loading="eager" />
+</div>
+
+<script>
+  import { thud } from "@/components/home/bootSound";
+  import { unlock } from "@/scripts/achievements";
+
+  let ctrl: AbortController | null = null;
+
+  const soundOn = () => {
+    try {
+      return localStorage.getItem("titleSound") !== "off" && (navigator.userActivation?.hasBeenActive ?? false);
+    } catch {
+      return false;
+    }
+  };
+
+  function init() {
+    const card = document.querySelector<HTMLElement>("[data-sl-end]");
+    const scare = document.querySelector<HTMLElement>("[data-sl-scare]");
+    if (!card || !scare || card.dataset.ready) return;
+    card.dataset.ready = "1";
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      card.classList.add("is-done");
+      // No scare with reduced motion: reaching the end still collects the
+      // achievement.
+      const io2 = new IntersectionObserver(es => {
+        if (es.some(e => e.isIntersecting)) {
+          io2.disconnect();
+          unlock("all-pages");
+        }
+      }, { threshold: 0.6 });
+      io2.observe(card);
+      signal.addEventListener("abort", () => io2.disconnect());
+      return;
+    }
+
+    const timers: number[] = [];
+    signal.addEventListener("abort", () => timers.forEach(clearTimeout));
+    const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+
+    const io = new IntersectionObserver(
+      entries => {
+        if (!entries.some(e => e.isIntersecting)) return;
+        io.disconnect();
+        // He's there…
+        scare.classList.add("is-on");
+        if (soundOn()) thud();
+        navigator.vibrate?.(120);
+        // …and gone: black for a beat, then the card.
+        later(150, () => scare.classList.add("is-gone"));
+        later(900, () => {
+          scare.classList.remove("is-on", "is-gone");
+          card.classList.add("is-done");
+        });
+        // Lived to tell it: an achievement, once the card reads.
+        later(2200, () => unlock("all-pages"));
+      },
+      { threshold: 0.6 }
+    );
+    io.observe(card);
+    signal.addEventListener("abort", () => io.disconnect());
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style>
+  /* The end card: a full screen of black after the write-up. */
+  .sl-end {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 1.5rem;
+    min-height: 80svh;
+    margin-top: 5rem;
+    text-align: center;
+  }
+  .sl-end-page {
+    margin: 0;
+    padding: 0.2em 0.8em 0.05em;
+    background: #e9e5da;
+    color: #161514;
+    font-family: var(--font-scrawl), cursive;
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    line-height: 1.1;
+    transform: rotate(-3deg);
+    clip-path: polygon(0 6%, 9% 0, 22% 5%, 38% 1%, 55% 6%, 71% 0, 86% 4%, 100% 1%, 98% 52%, 100% 96%, 84% 100%, 66% 95%, 47% 100%, 30% 94%, 14% 100%, 1% 95%, 3% 50%);
+  }
+  .sl-end-line {
+    margin: 0;
+    color: rgb(242 239 230 / 0.8);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 1.05rem;
+    opacity: 0;
+    transition: opacity 1.2s ease 0.3s;
+  }
+  .sl-end:global(.is-done) .sl-end-line {
+    opacity: 1;
+  }
+
+  /* The scare: a full-screen frame of the figure, close up. */
+  .sl-scare {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: none;
+    place-items: center;
+    overflow: hidden;
+    background: #000;
+    pointer-events: none;
+  }
+  .sl-scare:global(.is-on) {
+    display: grid;
+  }
+  .sl-scare img {
+    width: min(150vw, 150vh);
+    max-width: none;
+    height: auto;
+    /* Close on the face. */
+    transform: translateY(18%) scale(1.25);
+    filter: grayscale(1) contrast(1.6) brightness(1.15);
+  }
+  /* A spike of static over him. */
+  .sl-scare::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -0.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.5;
+    mix-blend-mode: screen;
+  }
+  /* Then black. */
+  .sl-scare:global(.is-gone) img,
+  .sl-scare:global(.is-gone)::after {
+    visibility: hidden;
+  }
+</style>

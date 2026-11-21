@@ -1,0 +1,28 @@
+---
+title: Sling
+kind: Prototype
+tagline: A **third-person** slingshot prototype with **destructible objects**.
+youtubeId: lBsur1Gt2lc
+cover: ./cover.webp
+order: 5
+color: rose
+tools: ['Unity', 'C#']
+features:
+  - Third-person camera
+  - name: Slingshot
+    items:
+      - Pull back to aim and launch
+      - Ball sticks where it lands
+  - name: Destructible objects
+    items:
+      - Cubes split into smaller cubes
+      - Fragments are pooled, not destroyed
+---
+
+## Overview
+
+Sling is a prototype inspired by Angry Birds and Paper Toss, moved into third person. Pull back to sling the ball, and it sticks wherever it lands.
+
+## Destructible objects
+
+I also used it to experiment with destruction. A cube splits dynamically into smaller cubes, and the fragments then disappear. They're returned to an object pool instead of being destroyed, so breaking things repeatedly doesn't keep allocating new objects.

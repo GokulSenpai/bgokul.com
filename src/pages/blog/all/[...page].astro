@@ -1,0 +1,36 @@
+---
+import type { GetStaticPaths } from "astro";
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import Notebook from "@/components/journal/Notebook.astro";
+import JournalEntry from "@/components/journal/JournalEntry.astro";
+import Pagination from "@/components/Pagination.astro";
+import { getSortedPosts } from "@/utils/getSortedPosts";
+import config from "@/config";
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const posts = await getCollection("posts", ({ data }) => !data.draft);
+  return paginate(getSortedPosts(posts), { pageSize: config.posts.perPage });
+}) satisfies GetStaticPaths;
+
+const { page } = Astro.props;
+---
+
+<Layout title={`All entries | ${config.site.title}`}>
+  <Header />
+
+  <Notebook
+    title="All entries"
+    kicker={`${page.total} in all`}
+    desc="Every page of the notebook, newest first."
+  >
+    <ul class="nb-entries">
+      {page.data.map(p => <JournalEntry post={p} />)}
+    </ul>
+    <Pagination {page} />
+  </Notebook>
+
+  <Footer />
+</Layout>

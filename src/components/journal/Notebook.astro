@@ -1,0 +1,497 @@
+---
+/**
+ * The Journal's notebook: every Journal page (the index, all entries,
+ * tags, archives, search and each entry) is a sheet of a spiral-bound
+ * notepad lying on the night desk. Cream ruled paper, a red margin line,
+ * spiral rings along the top, the site's hard pixel shadow.
+ *
+ * Transitions, with pencil sounds:
+ * - Coming into the Journal: the notepad slides up onto the desk and the
+ *   title writes itself in, left to right (a pencil scratch).
+ * - Opening an entry, or going back to a list: a page turn.
+ * - Leaving the Journal: the page slides away (a pencil flourish).
+ *
+ * Lists of entries ([data-entry] links) are a menu: ↑/↓ (or the wheel)
+ * move the cursor, Enter opens. Esc goes back (the HUD).
+ */
+import { Font } from "astro:assets";
+import JournalArt from "./JournalArt.astro";
+
+interface Props {
+  title: string;
+  /** Small scrawled note above the title, e.g. "Entry no. 3". */
+  kicker?: string;
+  desc?: string;
+  /** Show the notebook-and-pencil picture beside the title. */
+  art?: boolean;
+  /** An entry page (unlocks "Dear diary"). */
+  post?: boolean;
+}
+const { title, kicker, desc, art, post } = Astro.props;
+---
+
+<Font cssVariable="--font-console" />
+
+<main id="main-content" class="nb" data-notebook data-post={post ? "" : undefined}>
+  <div class="nb-sheet">
+    <div class="nb-rings" aria-hidden="true"></div>
+    <header class:list={["nb-head", { "has-art": art }]}>
+      <div class="nb-head-text">
+        {kicker && <p class="nb-kicker">{kicker}</p>}
+        <h1 class="nb-title"><span class="nb-write">{title}</span></h1>
+        {desc && <p class="nb-desc">{desc}</p>}
+        <slot name="head" />
+      </div>
+      {art && <JournalArt class="nb-art" />}
+    </header>
+    <div class="nb-body">
+      <slot />
+    </div>
+  </div>
+  <slot name="after" />
+</main>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { wheelSelect } from "@/scripts/wheelSelect";
+  import { pencilScratch, pencilFlourish, pencilTick, pageTurn } from "@/components/home/bootSound";
+  import { cameFrom, soundOn } from "@/scripts/cameFrom";
+  import { unlock } from "@/scripts/achievements";
+
+  const inJournal = (path: string) => /^\/(blog|tags|archives|search)(\/|$)/.test(path);
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    const nb = document.querySelector<HTMLElement>("[data-notebook]");
+    if (!nb || nb.dataset.ready) return;
+    nb.dataset.ready = "1";
+    ctrl?.abort();
+    ctrl = new AbortController();
+    const { signal } = ctrl;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const html = document.documentElement;
+
+    // Arriving: from outside the Journal the notepad slides onto the desk
+    // and the title is written in; from another Journal page, a page turn.
+    const from = cameFrom();
+    if (!reduce) nb.classList.add(from && inJournal(from) ? "is-turned" : "is-opening");
+    if (soundOn() && !(from && inJournal(from))) pencilScratch();
+    if (nb.hasAttribute("data-post")) unlock("dear-diary");
+
+    // Leaving by the HUD (◀ or Esc): within the Journal it's a page turn;
+    // out of it, the page slides away with a pencil flourish.
+    document.addEventListener(
+      "sys:leaving",
+      e => {
+        // Where to: the HUD says (back, or ⌂ home).
+        const href = (e as CustomEvent<{ href?: string }>).detail?.href ?? document.querySelector<HTMLAnchorElement>("[data-sys-back]")?.href;
+        const within = !!href && inJournal(new URL(href, location.href).pathname);
+        if (within) {
+          if (soundOn()) pageTurn();
+          nb.classList.add("is-turning-out");
+        } else {
+          if (soundOn()) pencilFlourish();
+          nb.classList.add("is-closing");
+        }
+      },
+      { signal }
+    );
+
+    // Links to other Journal pages (entries, tags, pages of the list):
+    // a page turn and the site's fade, then the page.
+    let going = false;
+    nb.addEventListener(
+      "click",
+      e => {
+        // Sharing an entry (the share icons): an achievement.
+        if ((e.target as HTMLElement).closest(".nb-share a")) unlock("share");
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        const a = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[href]");
+        if (!a || a.target || a.origin !== location.origin || !inJournal(a.pathname)) return;
+        if (a.pathname === location.pathname && a.hash) return; // an in-page jump
+        e.preventDefault();
+        if (going) return;
+        going = true;
+        if (soundOn()) pageTurn();
+        if (reduce) return void navigate(a.href);
+        nb.classList.add("is-turning-out");
+        html.classList.add("sys-leaving");
+        setTimeout(() => navigate(a.href), 380);
+      },
+      { signal }
+    );
+
+    // Lists are menus: ↑/↓ (or the wheel) move the cursor; Enter opens.
+    const links = [...nb.querySelectorAll<HTMLAnchorElement>("[data-entry]")];
+    if (links.length) {
+      let cur = 0;
+      const select = (i: number, focus = true) => {
+        const next = (i + links.length) % links.length;
+        // A tiny pencil tick when the cursor moves (not on the first set).
+        if (next !== cur && soundOn()) pencilTick();
+        cur = next;
+        links.forEach((a, k) => a.classList.toggle("is-active", k === cur));
+        if (focus) links[cur].focus({ preventScroll: false });
+      };
+      select(0, false);
+      links.forEach((a, i) => {
+        a.addEventListener("pointerenter", () => select(i, false), { signal });
+        a.addEventListener("focus", () => select(i, false), { signal });
+      });
+      document.addEventListener(
+        "keydown",
+        e => {
+          if (e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+          if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            select(cur + 1);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            select(cur - 1);
+          } else if (e.key === "Enter" && !(e.target as HTMLElement).closest("a, button")) {
+            e.preventDefault();
+            links[cur].click();
+          }
+        },
+        { signal }
+      );
+      wheelSelect(dir => select(cur + dir), signal, () => !going);
+    }
+
+    document.addEventListener("astro:before-swap", () => ctrl?.abort(), { signal, once: true });
+  }
+  document.addEventListener("astro:page-load", init);
+</script>
+
+<style is:global>
+  /* ── the notebook ─────────────────────────────────────────────── */
+  .nb {
+    --paper: #f4eedb;
+    --rule: rgb(80 120 185 / 0.22);
+    --margin: rgb(205 80 70 / 0.5);
+    --ink: #2b2724;
+    --pencil: #6b655d;
+    --hilite: rgb(255 205 100 / 0.7);
+    --line: 2rem;
+    --gutter: 4.75rem;
+    width: 100%;
+    max-width: 54rem;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vh, 4rem) 1rem 3rem;
+    /* Taped, tilted photos can poke out a little sideways: clip them at
+       the notebook's edge so phones never scroll sideways. */
+    overflow-x: clip;
+  }
+  /* The desk: a wooden table in the site's own night colours. The grain
+     (planks and fine streaks, tinted navy) shows mostly inside a soft pool
+     of warm desk-lamp light around the notebook, and fades into plain
+     night towards the edges, the way a desk looks lit by one lamp. */
+  html:has(main.nb) body {
+    background-image:
+      radial-gradient(ellipse 55% 50% at 50% 30%, rgb(255 196 120 / 0.08), transparent 70%),
+      radial-gradient(ellipse 75% 70% at 50% 35%, transparent 30%, rgb(7 8 26 / 0.92) 85%),
+      repeating-linear-gradient(180deg, transparent 0 132px, rgb(3 4 14 / 0.55) 132px 135px, rgb(154 160 214 / 0.06) 135px 136px),
+      repeating-linear-gradient(181deg, rgb(154 160 214 / 0.035) 0 2px, transparent 2px 9px, rgb(3 4 14 / 0.12) 9px 11px, transparent 11px 23px),
+      repeating-linear-gradient(179.4deg, transparent 0 37px, rgb(154 160 214 / 0.03) 37px 39px, transparent 39px 61px),
+      linear-gradient(180deg, #121531, #0d1028);
+    background-attachment: fixed;
+  }
+  /* The HUD windows as paper tabs: cream, ink, a pencil box. */
+  html:has(main.nb) :is(.sys-back, .sys-name) {
+    border: 2px solid #2b2724;
+    border-radius: 3px;
+    background: #f4eedb;
+    box-shadow: 4px 4px 0 rgb(0 0 0 / 0.55);
+    backdrop-filter: none;
+    color: #2b2724;
+  }
+  html:has(main.nb) .sys-back:is(:hover, :focus-visible) {
+    border-color: #2b2724;
+    background: rgb(255 205 100);
+    color: #2b2724;
+  }
+  html:has(main.nb) .sys-key {
+    border-color: rgb(43 39 36 / 0.55);
+    color: #2b2724;
+  }
+  /* The HUD windows line up with the notebook's edges. */
+  html:has(main.nb) .sysbar-inner {
+    max-width: 54rem;
+    padding-inline: 1rem;
+  }
+  @media (max-width: 640px) {
+    html:has(main.nb) .sysbar-inner {
+      padding-inline: 0.75rem;
+    }
+  }
+  .nb-sheet {
+    position: relative;
+    padding: 2.75rem 2.5rem 2.5rem var(--gutter);
+    color: var(--ink);
+    /* Dot-grid paper (a bullet journal's) with a red margin line. Dots, not
+       ruled lines: text never has to sit on them, so nothing ever looks
+       off the line, whatever the post has in it. */
+    background:
+      linear-gradient(90deg, transparent calc(var(--gutter) - 1.2rem), var(--margin) calc(var(--gutter) - 1.2rem) calc(var(--gutter) - 1.2rem + 2px), transparent calc(var(--gutter) - 1.2rem + 2px)),
+      radial-gradient(circle, var(--rule) 1.1px, transparent 1.6px) 0 0 / 1.5rem 1.5rem,
+      var(--paper);
+    box-shadow:
+      inset 0 0 0 2px rgb(60 50 30 / 0.12),
+      10px 10px 0 rgb(3 4 14 / 0.8);
+  }
+  /* Spiral rings along the top: holes punched in the paper, rings over
+     them. */
+  .nb-rings {
+    position: absolute;
+    top: -0.9rem;
+    left: 1.5rem;
+    right: 1.5rem;
+    height: 2rem;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 14px, #b7bde8 14px 18px, #8d93c4 18px 22px, transparent 22px 40px) 0 0 / 100% 1.35rem no-repeat,
+      repeating-linear-gradient(90deg, transparent 0 13px, #0b0d24 13px 23px, transparent 23px 40px) 0 1.15rem / 100% 0.55rem no-repeat;
+  }
+
+  /* Header */
+  .nb-head {
+    display: grid;
+    gap: 1.5rem;
+    align-items: start;
+    margin-bottom: 2rem;
+  }
+  .nb-head.has-art {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .nb-art {
+    width: clamp(6rem, 16vw, 9rem);
+    height: auto;
+    transform: rotate(3deg);
+    filter: drop-shadow(4px 4px 0 rgb(43 39 36 / 0.25));
+  }
+  /* Notes in pencil grey, in the clean reading font (easy to read). */
+  .nb-kicker {
+    margin: 0 0 0.4rem;
+    color: var(--pencil);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+  .nb-title {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-pixel), monospace;
+    font-size: clamp(1.9rem, 4.5vw, 2.8rem);
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  .nb-desc {
+    margin: 0.6rem 0 0;
+    max-width: 38rem;
+    color: #4d4741;
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 1.02rem;
+    line-height: 1.6;
+  }
+  .nb-body {
+    font-family: var(--font-console), system-ui, sans-serif;
+  }
+
+  /* Phones: a narrower margin, the picture under the title. */
+  @media (max-width: 640px) {
+    .nb {
+      --gutter: 2.4rem;
+      padding-inline: 0.75rem;
+    }
+    .nb-sheet {
+      padding: 2.25rem 1.1rem 2rem var(--gutter);
+    }
+    .nb-head.has-art {
+      grid-template-columns: 1fr;
+    }
+    .nb-art {
+      width: 6rem;
+      order: -1;
+    }
+  }
+
+  /* ── shared bits: pencil notes, links, tags, buttons ──────────── */
+  .nb a {
+    color: var(--ink);
+  }
+  .nb-note {
+    color: var(--pencil);
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+  .nb-section {
+    margin: 2.25rem 0 0.75rem;
+    color: var(--pencil);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  /* Tags: words circled in pencil. */
+  .nb-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .nb-tag {
+    display: inline-block;
+    padding: 0.1rem 0.6rem;
+    border: 1.5px solid rgb(107 101 93 / 0.6);
+    border-radius: 999px 900px 999px 950px;
+    color: var(--pencil) !important;
+    font-family: var(--font-console), system-ui, sans-serif;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+  .nb-tag:hover,
+  .nb-tag:focus-visible {
+    outline: none;
+    background: var(--hilite);
+    color: var(--ink) !important;
+  }
+  .nb-tag .n {
+    margin-left: 0.3rem;
+    opacity: 0.6;
+  }
+  /* Buttons on the page: pixel labels in pencil boxes. */
+  .nb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0 0.9rem;
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    background: transparent;
+    box-shadow: 3px 3px 0 rgb(43 39 36 / 0.25);
+    color: var(--ink) !important;
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.85rem;
+    font-variant-ligatures: none;
+    text-decoration: none;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s,
+      background 0.15s;
+  }
+  .nb-btn:hover,
+  .nb-btn:focus-visible {
+    outline: none;
+    background: var(--hilite);
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 rgb(43 39 36 / 0.3);
+  }
+  .nb-btn[aria-disabled="true"] {
+    opacity: 0.35;
+    pointer-events: none;
+    box-shadow: none;
+  }
+  .nb-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 2.5rem;
+  }
+
+  /* The ▲ Top button, as a scrap of the notebook's paper: ink text in a
+     pencil box, its progress filling in with highlighter. */
+  html:has(main.nb) .btt {
+    border: 2px solid #2b2724;
+    border-radius: 3px;
+    background: #f4eedb;
+    box-shadow: 4px 4px 0 rgb(3 4 14 / 0.8);
+    backdrop-filter: none;
+    color: #2b2724;
+  }
+  html:has(main.nb) .btt:hover,
+  html:has(main.nb) .btt:focus-visible {
+    border-color: #2b2724;
+    background: rgb(255 205 100);
+    color: #2b2724;
+  }
+  html:has(main.nb) .btt-bar {
+    border-color: rgb(43 39 36 / 0.55);
+  }
+  html:has(main.nb) .btt-bar span {
+    background: rgb(43 39 36 / 0.12);
+  }
+  html:has(main.nb) .btt-bar span.on {
+    background: rgb(255 190 70);
+  }
+
+  /* ── transitions ──────────────────────────────────────────────── */
+  /* Coming in: the notepad slides up onto the desk, settling with a slight
+     turn, and the title writes itself in. */
+  /* ("backwards", not "both": once played, the paper keeps no transform,
+     so fixed things on it, like the ▲ Top button, stay pinned to the
+     screen.) */
+  .nb.is-opening .nb-sheet {
+    animation: nb-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  @keyframes nb-in {
+    from {
+      opacity: 0;
+      transform: translateY(60px) rotate(-1.5deg);
+    }
+  }
+  .nb.is-opening .nb-write {
+    display: inline-block;
+    animation: nb-write 0.75s steps(16) 0.25s both;
+  }
+  @keyframes nb-write {
+    from {
+      clip-path: inset(-10% 100% -10% 0);
+    }
+    to {
+      clip-path: inset(-10% 0 -10% 0);
+    }
+  }
+  /* From another Journal page: the new page turns in from the right. */
+  .nb.is-turned .nb-sheet {
+    animation: nb-turn-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  @keyframes nb-turn-in {
+    from {
+      opacity: 0;
+      transform: translateX(40px) rotate(0.6deg);
+    }
+  }
+  /* Going to another Journal page: this one turns away to the left. */
+  .nb.is-turning-out .nb-sheet {
+    transform: translateX(-50px) rotate(-0.8deg);
+    opacity: 0.4;
+    transition:
+      transform 0.36s cubic-bezier(0.55, 0, 0.75, 0.2),
+      opacity 0.36s ease-in;
+  }
+  /* Leaving the Journal: the notepad slides down off the desk. */
+  .nb.is-closing .nb-sheet {
+    transform: translateY(70px) rotate(1.5deg);
+    opacity: 0.3;
+    transition:
+      transform 0.36s cubic-bezier(0.55, 0, 0.75, 0.2),
+      opacity 0.36s ease-in;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nb .nb-sheet,
+    .nb .nb-write {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+</style>

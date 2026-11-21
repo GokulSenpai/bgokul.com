@@ -1,0 +1,32 @@
+---
+title: CCC
+kind: Prototype
+tagline: A **realistic** custom character controller with an **inspection system**, built from scratch around a **state machine**.
+youtubeId: w5xJ80jdQc0
+cover: ./cover.webp
+order: 1
+color: yellow
+tools: ['Unity', 'C#']
+features:
+  - Modular state machine
+  - Zoom
+  - Flashlight toggle
+  - Peek around corners
+  - name: Object inspection
+    items:
+      - Raycast detection
+      - Interactable 3D object overlay
+  - Sine-wave head bob
+---
+
+## Overview
+
+CCC is a first-person character controller written from scratch for a horror game. I've always found the traditional controllers "floaty", so I decided to make it realistic.
+
+## How it works
+
+Each behaviour (walking, zooming, peeking around a corner, picking something up to inspect it) is its own state in a state machine. That keeps every mode of movement in one small, readable class, and adding or removing a behaviour doesn't mean untangling the others.
+
+Head bob and sway are driven by sine waves, so the camera rhythm follows the player's speed instead of playing a fixed animation.
+
+All of this can be customised to fit what a project needs.

@@ -1,0 +1,141 @@
+---
+/**
+ * A minimal Earth for The Abandoned Earth: a plain disc, simplified amber
+ * continents, a soft shadow. The continents are projected onto a turning
+ * sphere (orthographic, see earth.ts), so they foreshorten towards the rim
+ * and wrap round it, rather than sliding across. The first frame is drawn
+ * here on the server; the browser then turns it about once every two
+ * minutes. Reduced motion: still.
+ * `inline`: an illustration in the page flow instead of a faint backdrop.
+ */
+import { projectEarth } from "./earth";
+
+interface Props {
+  inline?: boolean;
+}
+const { inline = false } = Astro.props;
+const START_LON = 15; // Africa and Europe facing the viewer
+const paths = projectEarth(START_LON);
+---
+
+<div class:list={["globe", { inline }]} aria-hidden="true" data-earth data-start={START_LON}>
+  <svg viewBox="0 0 200 200">
+    <defs>
+      <!-- Light from the upper left; night falls to the lower right. -->
+      <radialGradient id="ae-shade" cx="35%" cy="30%" r="80%">
+        <stop offset="0%" stop-color="#000" stop-opacity="0"></stop>
+        <stop offset="55%" stop-color="#000" stop-opacity="0.15"></stop>
+        <stop offset="100%" stop-color="#000" stop-opacity="0.75"></stop>
+      </radialGradient>
+      <clipPath id="ae-disc">
+        <circle cx="100" cy="100" r="96"></circle>
+      </clipPath>
+    </defs>
+
+    <circle cx="100" cy="100" r="96" class="sea"></circle>
+    <g clip-path="url(#ae-disc)">
+      <g class="land" data-earth-land>
+        {paths.map(d => <path d={d}></path>)}
+      </g>
+      <circle cx="100" cy="100" r="96" fill="url(#ae-shade)"></circle>
+    </g>
+    <circle cx="100" cy="100" r="96" class="rim"></circle>
+  </svg>
+</div>
+
+<script>
+  import { projectEarth } from "./earth";
+
+  const DEG_PER_SEC = 360 / 120; // one turn every two minutes
+
+  function initEarth() {
+    const root = document.querySelector<HTMLElement>("[data-earth]");
+    if (!root || root.dataset.init) return;
+    root.dataset.init = "true";
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const paths = [...root.querySelectorAll<SVGPathElement>("[data-earth-land] path")];
+    const startLon = Number(root.dataset.start) || 0;
+    const t0 = performance.now();
+    let raf = 0;
+    let last = 0;
+
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      if (now - last < 33) return; // ~30 fps is plenty for a slow turn
+      last = now;
+      // Turning eastward: the facing longitude moves west over time.
+      const center = startLon - ((now - t0) / 1000) * DEG_PER_SEC;
+      projectEarth(center).forEach((d, i) => paths[i]?.setAttribute("d", d));
+    };
+    raf = requestAnimationFrame(loop);
+
+    const onVis = () => {
+      cancelAnimationFrame(raf);
+      if (!document.hidden) raf = requestAnimationFrame(loop);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    document.addEventListener(
+      "astro:before-swap",
+      () => {
+        cancelAnimationFrame(raf);
+        document.removeEventListener("visibilitychange", onVis);
+      },
+      { once: true }
+    );
+  }
+  initEarth();
+  document.addEventListener("astro:page-load", initEarth);
+</script>
+
+<style>
+  /* Default: fixed faintly behind the text (the chapter is its own
+     stacking context). */
+  .globe {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: -1;
+    width: min(80vmin, 640px);
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0.22;
+  }
+  .globe.inline {
+    position: relative;
+    top: auto;
+    left: auto;
+    z-index: auto;
+    width: min(100%, 20rem);
+    margin: 0 auto;
+    transform: none;
+    opacity: 1;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Muted slate-blue sea: dark and dusty like the page, but clearly water
+     against the amber land. */
+  .sea {
+    fill: #3d5263;
+  }
+  .land :global(path) {
+    fill: var(--nv-accent);
+    /* Round off the straight segments so coastlines read soft. */
+    stroke: var(--nv-accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+  .globe.inline .land {
+    opacity: 0.85;
+  }
+  .rim {
+    fill: none;
+    stroke: var(--nv-ink);
+    stroke-width: 0.6;
+    opacity: 0.5;
+  }
+</style>

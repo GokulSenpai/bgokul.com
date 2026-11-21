@@ -1,0 +1,67 @@
+---
+/**
+ * "Come back" tab-title effect: swaps document.title for a random plea
+ * while the tab is hidden/unfocused, restores the real title when it's
+ * visible again. Include this component only on the page(s) that should
+ * have the effect — it is not loaded globally from the layout.
+ */
+import { comeBackMessages } from "@/data/comeBackMessages";
+---
+
+<script is:inline define:vars={{ messages: comeBackMessages }}>
+  function initComeBackTitle() {
+    if (window.__comeBackTitleInit) return;
+    window.__comeBackTitleInit = true;
+
+    const originalTitle = document.title;
+    let lastIndex = -1;
+
+    function pickMessage() {
+      if (messages.length === 0) return originalTitle;
+      if (messages.length === 1) return messages[0];
+      let index;
+      do {
+        index = Math.floor(Math.random() * messages.length);
+      } while (index === lastIndex);
+      lastIndex = index;
+      return messages[index];
+    }
+
+    function onHide() {
+      document.title = pickMessage();
+    }
+
+    function onShow() {
+      document.title = originalTitle;
+    }
+
+    // Standard Page Visibility API, with vendor-prefixed fallbacks for
+    // older browsers (WebKit/old Chrome, old Firefox, old IE).
+    const visibilityMap = [
+      { hidden: "hidden", event: "visibilitychange" },
+      { hidden: "webkitHidden", event: "webkitvisibilitychange" },
+      { hidden: "mozHidden", event: "mozvisibilitychange" },
+      { hidden: "msHidden", event: "msvisibilitychange" },
+    ];
+
+    const supported = visibilityMap.find(({ hidden }) => hidden in document);
+
+    if (supported) {
+      document.addEventListener(supported.event, () => {
+        if (document[supported.hidden]) {
+          onHide();
+        } else {
+          onShow();
+        }
+      });
+    } else {
+      // Very old browsers with no Visibility API at all: approximate with
+      // window focus/blur instead.
+      window.addEventListener("blur", onHide);
+      window.addEventListener("focus", onShow);
+    }
+  }
+
+  initComeBackTitle();
+  document.addEventListener("astro:page-load", initComeBackTitle);
+</script>

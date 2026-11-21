@@ -1,0 +1,121 @@
+---
+title: 17YA
+order: 2
+status: in-game
+kind: Game narrative
+hook: 'A psychological horror game about a loop.'
+titleArt: 17ya-cipher
+palette:
+  top: '#161413'
+  bottom: '#0b0a0a'
+  ink: '#d6cdb6'
+  muted: '#968c78'
+  accent: '#c8943a'
+---
+
+import WallText from "@/components/narrative/17ya/WallText.astro";
+import RoomB from "@/components/narrative/17ya/RoomB.astro";
+import Letter from "@/components/narrative/17ya/Letter.astro";
+import Trigger from "@/components/narrative/17ya/Trigger.astro";
+import Credits from "@/components/narrative/17ya/Credits.astro";
+import Sketch from "@/components/narrative/17ya/Sketch.astro";
+import LoopClock from "@/components/narrative/17ya/LoopClock.astro";
+import pocketwatch from "./art/pocketwatch.webp";
+import windowArt from "./art/window.webp";
+import family from "./art/family.webp";
+import scarf from "./art/scarf.webp";
+import mirror from "./art/mirror.webp";
+
+<LoopClock />
+
+## The title
+
+17YA is ILYA: 1 is I, 7 is L. His daughter's name, written by a man losing coherence until it reads like an experiment's reference number.
+
+It's also hidden in D178N, the mutation behind Fatal Familial Insomnia, the disease that killed her mother and is killing her. The loops count down from 178 to 1. The letter at the heart of the game opens with *Dear Ilya*. The title was always the address.
+
+<Sketch src={pocketwatch} alt="A hand holding an open pocket watch engraved “For Ilya”." caption="His pocket watch. Wiped clean, it reads “For Ilya”." size="sm" />
+
+## The story
+
+A man moves through a single room, seen from a fixed angle. The player clicks objects, he examines them, and his thoughts appear on the walls. The clock runs backwards, from five past twelve to twelve, and when it gets there a man comes through the door and shoots him. The loop starts again. The game ends when the player finishes his letter to his dying daughter.
+
+> Grief for someone whose name you didn't learn until the credits, and quiet complicity, because we are downstream of their suffering.
+
+## The science
+
+Everything that happens to him is grounded in the real biology of sleep. Fatal Familial Insomnia is an inherited disease that destroys the brain's ability to sleep, and past 72 hours awake the brain starts forcing dream states into waking life. The loop is a mind that can't wake up, replaying the last moment it understood.
+
+Late in the game the disguise drops. Through the window are researchers with clipboards, and he finally says what he couldn't: *D178N Trial. I volunteered for her.*
+
+<Sketch src={windowArt} alt="Through a round window, researchers in lab coats, one holding a clipboard marked #17." caption="The window, in the second room." />
+
+## The people
+
+**Angelo.** Loosely inspired by a real Angelo: a son of the Venetian family that Fatal Familial Insomnia was first traced through, remembered in the family tree and almost nowhere else. In the game he's never named until the credits. He believes suffering leads somewhere, because otherwise his wife's death meant nothing.
+
+**Ilya.** Never seen. Her duck sits in the room, and in the family photo she's labelled everyone herself: dad, mom, me.
+
+<Sketch src={family} alt="Hands holding a family photo; the figures are labelled dad, mom and me in a child's handwriting." caption="The family photo." />
+
+**The wife.** Gone before the game begins. Her scarf is on the chair. Picking it up brings back a memory: tying it around her hand, then a tombstone in the rain. The wall says: *hers. she can sleep now.*
+
+<Sketch src={scarf} alt="A scarf tied around a woman's hand." size="sm" />
+
+**The shooter.** Comes through the door at the end of every loop. Speak to him and he only gets fragments out: *Don't—*, *She's—*, *Waiting—*.
+
+## The room is the mind
+
+There's no diary and no exposition. Examining an object writes a thought on the wall beside it, and some of those thoughts hold a word that belongs in the letter.
+
+<WallText
+  caption="The first room. The brighter words are the ones that belong in the letter."
+  lines={[
+    { text: "Papa?", x: 6, y: 9, rot: -3, bright: true, near: "duck" },
+    { text: "Who is she?", x: 36, y: 7, rot: 2, near: "photo" },
+    { text: "Backwards?", x: 76, y: 10, rot: 3, near: "clock" },
+    { text: "Her duck.", x: 12, y: 40, rot: 1, bright: true, near: "photo" },
+    { text: "Can't read it.", x: 48, y: 30, rot: -1, near: "pocket watch" },
+    { text: "mama", x: 74, y: 44, rot: -2, bright: true, near: "photo" },
+    { text: "ILYA", x: 50, y: 58, rot: -2, size: 1.5, bright: true, near: "pocket watch" },
+    { text: "hers. she can sleep now.", x: 5, y: 74, rot: -2, near: "scarf" },
+    { text: "Waiting—", x: 70, y: 80, rot: 2, bright: true, near: "door" },
+  ]}
+/>
+
+Finish the letter and the room changes. In the second room, the same objects say:
+
+<RoomB
+  items={[
+    { object: "Duck", line: "Still waiting." },
+    { object: "Photo", line: "We looked happy." },
+    { object: "Pocket watch", line: "Not enough time." },
+    { object: "Scarf", line: "She can finally sleep." },
+    { object: "Window", line: "D178N Trial. I volunteered for her." },
+    { object: "Clock", line: "I can sleep now." },
+  ]}
+/>
+
+## The letter
+
+Six words are missing. They surface on the walls as he remembers them, and the player puts them back. The seventh, he writes himself. Try it.
+
+<Letter />
+
+## The ending
+
+<Trigger>
+
+In the second room, the mirror on the door is only a mirror. He looks into it, and the reflection holds a gun to its own head. The shooter was always him. One prompt: *Shoot.*
+
+<Sketch src={mirror} alt="A man looking into a mirror; his reflection holds a gun to its own head." />
+
+The screen cuts to black on the gunshot, and the credits roll.
+
+<Credits />
+
+If the last loop runs out before the letter is finished, it ends the same way, but the credits don't: *The letter stayed unfinished. Goodnight, ___.*
+
+</Trigger>
+
+How it plays, and how the design got here, is on the [17YA design page](/portfolio/design/17ya).

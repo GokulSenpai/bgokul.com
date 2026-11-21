@@ -1,0 +1,64 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import config from "@/config";
+
+type Props = {
+  pageTitle: string | [string, string];
+  pageDesc?: string;
+  class?: string;
+  /** Use a wider content column than the site's default 768px — a
+   * deliberate exception for pages like the Design grid, where fitting
+   * more per row cuts down on scrolling enough to be worth breaking
+   * alignment with the header's width. */
+  wide?: boolean;
+};
+
+const { pageTitle, pageDesc, class: className, wide } = Astro.props;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const backUrl = config.features.showBackButton
+  ? Astro.url.pathname
+  : getRelativeLocaleUrl(locale, "");
+---
+
+<main
+  data-backUrl={backUrl}
+  id="main-content"
+  class:list={[
+    wide ? "max-w-6xl" : "max-w-app",
+    "mx-auto w-full px-4 pb-4",
+    className,
+  ]}
+>
+  <h1 class="page-title">{pageTitle}</h1>
+  <p class="page-desc">{pageDesc}</p>
+  <slot />
+</main>
+
+<script>
+  document.addEventListener("astro:page-load", () => {
+    const mainContent: HTMLElement | null =
+      document.querySelector("#main-content");
+    const backUrl = mainContent?.dataset?.backurl;
+    if (backUrl) {
+      sessionStorage.setItem("backUrl", backUrl);
+    }
+  });
+</script>
+
+<style>
+  /* Page titles match the main menu: pixel type with a hard drop shadow. */
+  .page-title {
+    margin: 2rem 0 0;
+    font-family: var(--font-pixel), monospace;
+    font-size: clamp(1.9rem, 4vw, 2.6rem);
+    font-variant-ligatures: none;
+    font-weight: 600;
+    line-height: 1.1;
+    text-shadow: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+  }
+  .page-desc {
+    margin: 0.5rem 0 1.75rem;
+    color: var(--muted-foreground);
+  }
+</style>

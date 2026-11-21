@@ -1,0 +1,798 @@
+---
+/**
+ * Portfolio: a retro save-file select screen. "Start" on the home menu
+ * lands here, and it matches the menu: the same pixel night scene behind
+ * it (dimmed), the same pixel font and colours (moonlight text, the
+ * lighthouse lamp's amber for the selection), and the lighthouse beam
+ * spotlights the selected file.
+ *
+ * Each section of the portfolio is a save file (Design, Narrative, Coding,
+ * Breakdowns), drawn as an old JRPG save window with a pixel-art portrait.
+ * The last slot is empty: a new game, which goes to Contact. Every file's
+ * details come from the real content, so they update themselves.
+ *
+ * Arrow keys move the selection, Enter loads, Esc goes back to the menu.
+ * Loading fills a block-by-block bar, chimes, and fades to black.
+ *
+ *
+ */
+import { getCollection } from "astro:content";
+import { Font } from "astro:assets";
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import NightScene from "@/components/home/NightScene.astro";
+import SavePortrait from "@/components/home/SavePortrait.astro";
+import config from "@/config";
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const homePath = getRelativeLocaleUrl(locale, "");
+
+const projects = (await getCollection("projects")).sort(
+  (a, b) => Number(b.data.featured) - Number(a.data.featured) || a.data.order - b.data.order
+);
+const building = projects.find(p => p.data.status === "in-development");
+
+const narrative = (await getCollection("narrative")).sort((a, b) => a.data.order - b.data.order);
+const featuredChapter = narrative.find(n => n.data.featured) ?? narrative[0];
+
+const coding = (await getCollection("coding")).sort((a, b) => a.data.order - b.data.order);
+
+const breakdowns = (await getCollection("breakdowns")).filter(b =>
+  import.meta.env.PROD ? !b.data.draft : true
+);
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+type Slot = {
+  key: "design" | "narrative" | "coding" | "breakdowns";
+  name: string;
+  role: string;
+  where: string;
+  count: number;
+  unit: string;
+  href: string;
+};
+
+const slots: Slot[] = [
+  {
+    key: "design",
+    name: "Design",
+    role: "Game designer",
+    where: building ? `Now building: ${building.data.title}` : "Games I've made",
+    count: projects.length,
+    unit: plural(projects.length, "game", "games"),
+    href: "/portfolio/design",
+  },
+  {
+    key: "narrative",
+    name: "Narrative",
+    role: "Storyteller",
+    where: featuredChapter ? `Last chapter: ${featuredChapter.data.title}` : "Stories, poems and game writing",
+    count: narrative.length,
+    unit: plural(narrative.length, "chapter", "chapters"),
+    href: "/portfolio/narrative",
+  },
+  {
+    key: "coding",
+    name: "Coding",
+    role: "Tinkerer",
+    where: coding[0] ? `Last run: ${coding[0].data.title}` : "Experiments and prototypes",
+    count: coding.length,
+    unit: plural(coding.length, "project", "projects"),
+    href: "/portfolio/coding",
+  },
+  {
+    key: "breakdowns",
+    name: "Breakdowns",
+    role: "Thief (borrows ideas)",
+    where: breakdowns[0] ? `Open case: ${breakdowns[0].data.subject}` : "Elements I've borrowed",
+    count: breakdowns.length,
+    unit: plural(breakdowns.length, "file", "files"),
+    href: "/portfolio/breakdowns",
+  },
+];
+const pad = (n: number) => String(n).padStart(2, "0");
+const blocks = Array.from({ length: 10 }, (_, k) => k);
+---
+
+<Layout title={`Portfolio | ${config.site.title}`}>
+  <Fragment slot="head">
+    <Font cssVariable="--font-pixel" preload={[{ subset: "latin", weight: 500, style: "normal" }]} />
+  </Fragment>
+
+  <main id="main-content" class="saves" data-saves data-home={homePath}>
+    <!-- The main menu's night scene, dimmed -->
+    <div class="backdrop" aria-hidden="true">
+      <NightScene />
+      <div class="dim"></div>
+    </div>
+
+    <div class="frame">
+      <header class="top">
+        <a href={homePath} class="back" data-back>
+          <span class="key" aria-hidden="true">Esc</span> Main menu
+        </a>
+      </header>
+
+      <p class="kicker">Load game</p>
+      <h1 class="title">Select a file</h1>
+
+      <ol class="slots">
+        {slots.map((s, i) => (
+          <li>
+            <a href={s.href} class:list={["slot", `slot--${s.key}`, { "is-active": i === 0 }]} data-slot>
+              <span class="cursor" aria-hidden="true">▶</span>
+              <span class="thumb" aria-hidden="true">
+                <SavePortrait kind={s.key} />
+              </span>
+              <span class="info">
+                <span class="file">File {pad(i + 1)}</span>
+                <span class="name">{s.name}</span>
+                <span class="role">Class: {s.role}</span>
+                <span class="where">{s.where}</span>
+              </span>
+              <span class="stats">
+                <span class="count">{s.count}</span>
+                <span class="unit">{s.unit}</span>
+              </span>
+              <span class="loading" aria-hidden="true">
+                <span class="loading-text">Loading</span>
+                <span class="loading-bar">{blocks.map(k => <span style={`--k:${k}`} />)}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+        <li>
+          <a href="/contact" class="slot slot--new" data-slot>
+            <span class="cursor" aria-hidden="true">▶</span>
+            <span class="thumb thumb--empty" aria-hidden="true"><span>+</span></span>
+            <span class="info">
+              <span class="file">File {pad(slots.length + 1)}</span>
+              <span class="name">Empty</span>
+              <span class="where">New game: start something with me</span>
+            </span>
+            <span class="stats">
+              <span class="unit">Contact</span>
+            </span>
+            <span class="loading" aria-hidden="true">
+              <span class="loading-text">Loading</span>
+              <span class="loading-bar">{blocks.map(k => <span style={`--k:${k}`} />)}</span>
+            </span>
+          </a>
+        </li>
+      </ol>
+
+      <footer class="keys" aria-hidden="true">
+        <span><span class="key">↑</span><span class="key">↓</span> Select</span>
+        <span><span class="key">Enter</span> Load</span>
+        <span><span class="key">Esc</span> Back</span>
+      </footer>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { wheelSelect } from "@/scripts/wheelSelect";
+  import { sfx } from "@/components/home/bootSound";
+  import * as music from "@/components/home/titleMusic";
+
+  let cleanup: (() => void) | null = null;
+
+  // Same sound rules as the main menu: only after a press, and not if the
+  // visitor switched sound off there.
+  const soundOn = () => {
+    try {
+      return localStorage.getItem("titleSound") !== "off" && (navigator.userActivation?.hasBeenActive ?? true);
+    } catch {
+      return false;
+    }
+  };
+  const NOTES = [880, 1046.5, 1174.66, 1318.51, 1567.98];
+
+  function initSaves() {
+    const root = document.querySelector<HTMLElement>("[data-saves]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+
+    const ac = new AbortController();
+    const { signal } = ac;
+    const slots = [...root.querySelectorAll<HTMLAnchorElement>("[data-slot]")];
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const wide = matchMedia("(min-width: 900px)");
+    let cur = 0;
+    let loading = false;
+    let timer = 0;
+
+    // The mouse wheel moves through the save files.
+    wheelSelect(dir => select(cur + dir, true), signal, () => !loading);
+
+    // The lighthouse beam spotlights the selected file (on wide screens,
+    // where the lighthouse sits clear of the list).
+    const aim = () => {
+      let detail: { x: number; y: number } | null = null;
+      if (wide.matches) {
+        const r = slots[cur].getBoundingClientRect();
+        detail = { x: r.right - 24, y: r.top + r.height / 2 };
+      }
+      document.dispatchEvent(new CustomEvent("night:aim", { detail }));
+    };
+
+    const select = (i: number, focus = false) => {
+      if (loading) return;
+      const prev = cur;
+      cur = (i + slots.length) % slots.length;
+      slots.forEach((el, j) => el.classList.toggle("is-active", j === cur));
+      if (focus) slots[cur].focus();
+      aim();
+      if (prev !== cur && soundOn()) sfx([NOTES[cur]], 0, 0.03);
+    };
+    // Let the scene draw first, then the beam finds File 01.
+    timer = window.setTimeout(aim, 300);
+    addEventListener("resize", () => !idle && aim(), { signal });
+
+    // Gone quiet? After a while with no input the lighthouse stops
+    // spotlighting a file and goes back to its job, sweeping the sea.
+    // Any input at all wakes it, even the mouse shifting inside the file
+    // it's resting on (no new "hover" fires for a mouse that never left,
+    // so a tiny move has to count too), and the beam swings straight back
+    // to the selected file.
+    const IDLE_MS = 12000;
+    let idle = false;
+    let idleTimer = 0;
+    const rest = () => {
+      if (loading) return;
+      idle = true;
+      document.dispatchEvent(new CustomEvent("night:aim", { detail: null }));
+    };
+    const wake = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(rest, IDLE_MS);
+      if (!idle) return;
+      idle = false;
+      aim();
+    };
+    for (const type of ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"])
+      document.addEventListener(type, wake, { signal, passive: true });
+    wake();
+    signal.addEventListener("abort", () => window.clearTimeout(idleTimer));
+
+    slots.forEach((el, i) => {
+      el.addEventListener("pointerenter", () => select(i), { signal });
+      el.addEventListener("focus", () => select(i), { signal });
+      // Load: the bar fills block by block, a chime, a fade, then go.
+      el.addEventListener(
+        "click",
+        e => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          if (loading) return;
+          select(i);
+          loading = true;
+          if (soundOn()) sfx([880, 1318.51], 0.08, 0.06);
+          // Loading a file: the menu theme fades out as the bar fills.
+          if (!music.isMenuPath(new URL(el.href).pathname)) music.stop();
+          root.classList.add("is-loading");
+          el.classList.add("is-loading");
+          timer = window.setTimeout(() => navigate(el.href), reduce ? 0 : 950);
+        },
+        { signal }
+      );
+    });
+
+    document.addEventListener(
+      "keydown",
+      e => {
+        if (e.altKey || e.ctrlKey || e.metaKey) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          select(cur + 1, true);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          select(cur - 1, true);
+        } else if (e.key === "Enter" && !slots.includes(document.activeElement as HTMLAnchorElement)) {
+          slots[cur].click();
+        } else if (e.key === "Escape") {
+          if ((e.target as HTMLElement).closest("input, textarea")) return;
+          goBack();
+        }
+      },
+      { signal }
+    );
+
+    // Back to the main menu (Esc or the back link): fade to black first.
+    function goBack() {
+      if (loading) return;
+      loading = true;
+      // Start's two bells in reverse (E then A, falling), a touch slower
+      // and softer: settling back into the main menu.
+      if (soundOn()) sfx([1318.51, 880], 0.1, 0.045);
+      if (reduce) return navigate(root!.dataset.home || "/");
+      document.documentElement.classList.add("sys-leaving");
+      timer = window.setTimeout(() => navigate(root!.dataset.home || "/"), 380);
+    }
+    root.querySelector<HTMLAnchorElement>("[data-back]")?.addEventListener(
+      "click",
+      e => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        goBack();
+      },
+      { signal }
+    );
+
+    // The menu theme: still playing from the main menu, or fading back in
+    // when returning here from a section (if sound is on).
+    if (soundOn() && !music.isPlaying()) music.start();
+
+    cleanup = () => {
+      ac.abort();
+      window.clearTimeout(timer);
+    };
+  }
+
+  document.addEventListener("astro:page-load", initSaves);
+  document.addEventListener("astro:before-swap", e => {
+    cleanup?.();
+    cleanup = null;
+    // Leaving the menu layer: the theme fades out.
+    if (!music.isMenuPath(e.to?.pathname ?? "")) music.stop();
+  });
+</script>
+
+<style>
+  :global(html:has(.saves)) {
+    overflow-y: auto;
+    background: #04050c;
+  }
+  :global(body:has(.saves)) {
+    background: transparent;
+  }
+  .saves {
+    /* The main menu's palette: lamp amber, moonlight, dusk sky, night. */
+    --acc: #ffd27a;
+    --moon: #efecdc;
+    --dusk: #9aa0d6;
+    --night: #07081a;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+    position: relative;
+    isolation: isolate;
+    min-height: 100svh;
+    padding: clamp(1.25rem, 4vh, 2.25rem) 1rem clamp(1.25rem, 4vh, 2rem);
+    color: var(--moon);
+    font-family: var(--font-pixel), ui-monospace, monospace;
+    /* The pixel font's "fi" ligature reads like an "A". */
+    font-variant-ligatures: none;
+  }
+
+  /* Daytime (see NightScene): navy text with a soft light drop shadow outside the
+     windows; the save windows themselves keep their night colours. */
+  :global(html[data-scene="day"]) .saves {
+    --moon: #13213f;
+    --dusk: #1d3566;
+    --hard: 0.07em 0.07em 0 rgb(255 255 255 / 0.35);
+  }
+  /* Over the sea and sky by day, the back link and key hints sit in navy
+     "dialog box" panels so they read on anything. */
+  :global(html[data-scene="day"]) :is(.back, .keys) {
+    width: fit-content;
+    padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+    border-radius: 4px;
+    /* Navy panels with cream text, like the cursor bar and save windows. */
+    background: rgb(19 33 63 / 0.9);
+    box-shadow: 3px 3px 0 rgb(19 33 63 / 0.3);
+    color: #f3efe2;
+    text-shadow: none;
+  }
+  :global(html[data-scene="day"]) .back:is(:hover, :focus-visible) {
+    color: #ffe9b0;
+  }
+  :global(html[data-scene="day"]) .keys {
+    margin-top: auto;
+    padding-top: 0.35rem;
+  }
+  :global(html[data-scene="day"]) .kicker {
+    color: var(--moon);
+  }
+  :global(html[data-scene="day"]) .dim {
+    background:
+      linear-gradient(90deg, rgb(255 255 255 / 0.3) 0%, rgb(255 255 255 / 0.12) 50%, transparent 80%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.05) 0 1px, transparent 1px 3px);
+  }
+  .slots {
+    --moon: #efecdc;
+    --dusk: #9aa0d6;
+    --hard: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+  }
+
+  /* ── The scene behind, dimmed on the left so the windows read ── */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #04050c;
+  }
+  .dim {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgb(4 5 12 / 0.7) 0%, rgb(4 5 12 / 0.45) 50%, rgb(4 5 12 / 0.1) 80%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+  }
+
+  .frame {
+    display: flex;
+    flex-direction: column;
+    max-width: 72rem;
+    min-height: calc(100svh - clamp(2.5rem, 8vh, 4.25rem));
+    margin: 0 auto;
+  }
+
+  /* ── Top ─────────────────────────────────────────────────────── */
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    color: var(--dusk);
+    font-size: 0.95rem;
+    text-decoration: none;
+    text-shadow: var(--hard);
+    transition: color 0.15s;
+  }
+  .back:hover,
+  .back:focus-visible {
+    outline: none;
+    color: var(--moon);
+  }
+  .key {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.8rem;
+    height: 1.6rem;
+    padding: 0 0.4rem;
+    border: 2px solid rgb(154 160 214 / 0.55);
+    border-bottom-width: 4px;
+    border-radius: 3px;
+    background: rgb(12 14 42 / 0.8);
+    color: #efecdc;
+    font-size: 0.72rem;
+    text-shadow: none;
+  }
+
+  .kicker {
+    margin: clamp(0.75rem, 2.5vh, 1.5rem) 0 0;
+    color: var(--acc);
+    font-size: 0.8rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    text-shadow: var(--hard);
+  }
+  .title {
+    margin: 0.3rem 0 clamp(1rem, 2.5vh, 1.5rem);
+    font-size: clamp(2rem, 4.2vw, 3rem);
+    font-weight: 600;
+    line-height: 1.05;
+    text-shadow:
+      var(--hard),
+      0 0 30px rgb(255 214 140 / 0.12);
+  }
+
+  /* ── The save windows ────────────────────────────────────────── */
+  .slots {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 46rem;
+    margin: 0;
+    padding: 0 0 0 1.6rem;
+    list-style: none;
+  }
+  .slots li {
+    animation: slot-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .slots li:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .slots li:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .slots li:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  .slots li:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+  @keyframes slot-in {
+    from {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+  }
+
+  /* An old JRPG window: navy gradient, a light pixel border with a dark
+     inner line, and a hard drop shadow. */
+  .slot {
+    position: relative;
+    display: grid;
+    grid-template-columns: 6rem 1fr auto;
+    align-items: center;
+    gap: 0 1.1rem;
+    padding: 0.5rem 1.1rem 0.5rem 0.5rem;
+    border: 3px solid rgb(154 160 214 / 0.45);
+    border-radius: 6px;
+    background: linear-gradient(180deg, rgb(32 38 104 / 0.92) 0%, rgb(14 17 56 / 0.92) 100%);
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.85),
+      5px 5px 0 rgb(3 4 14 / 0.85);
+    color: rgb(239 236 220 / 0.6);
+    text-decoration: none;
+    text-shadow: var(--hard);
+    transition:
+      border-color 0.15s,
+      color 0.15s,
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.2s;
+  }
+  .slot:focus-visible {
+    outline: none;
+  }
+  .slot.is-active {
+    border-color: var(--acc);
+    color: var(--moon);
+    transform: translateX(6px);
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.85),
+      5px 5px 0 rgb(3 4 14 / 0.85),
+      0 0 24px -4px rgb(255 210 122 / 0.35);
+  }
+  /* The pointing cursor beside the selected window, bobbing smoothly. */
+  .cursor {
+    position: absolute;
+    top: 50%;
+    left: -1.7rem;
+    color: var(--acc);
+    font-size: 1rem;
+    opacity: 0;
+    transform: translateY(-50%);
+  }
+  .slot.is-active .cursor {
+    opacity: 1;
+    animation: point 0.8s ease-in-out infinite;
+  }
+  @keyframes point {
+    50% {
+      transform: translate(4px, -50%);
+    }
+  }
+
+  /* Portraits: a little pixel-art icon per file, in a framed window. */
+  .thumb {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border: 2px solid rgb(5 6 20 / 0.9);
+    border-radius: 2px;
+    background: #0a0c26;
+    outline: 2px solid rgb(154 160 214 / 0.35);
+    filter: grayscale(0.6) brightness(0.7);
+    transition: filter 0.2s;
+  }
+  .slot.is-active .thumb {
+    filter: none;
+    outline-color: rgb(255 210 122 / 0.6);
+  }
+  /* Each portrait is pixel art (see components/home/SavePortrait.astro). */
+  .thumb--empty {
+    display: grid;
+    place-items: center;
+    border-style: dashed;
+    background: transparent;
+    color: var(--dusk);
+    font-size: 1.8rem;
+  }
+  .slot--new {
+    border-style: dashed;
+    background: rgb(10 12 38 / 0.6);
+  }
+
+  .info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .file {
+    color: var(--dusk);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .slot.is-active .file {
+    color: var(--acc);
+  }
+  .name {
+    margin-top: 0.1rem;
+    font-size: clamp(1.25rem, 2.2vw, 1.6rem);
+    font-weight: 600;
+    line-height: 1.15;
+  }
+  .role,
+  .where {
+    margin-top: 0.15rem;
+    overflow: hidden;
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .role {
+    color: rgb(239 236 220 / 0.7);
+  }
+  .where {
+    color: var(--dusk);
+  }
+
+  .stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+  }
+  .count {
+    font-size: clamp(1.6rem, 2.8vw, 2.1rem);
+    font-weight: 600;
+    line-height: 1;
+  }
+  .slot.is-active .count {
+    color: var(--acc);
+  }
+  .unit {
+    margin-top: 0.3rem;
+    color: var(--dusk);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ── Loading: a block-by-block bar over the chosen window ────── */
+  .loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 3px;
+    background: rgb(8 10 32 / 0.92);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .loading-text {
+    color: var(--acc);
+    font-size: 0.85rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  .loading-bar {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border: 2px solid rgb(154 160 214 / 0.6);
+  }
+  .loading-bar span {
+    width: clamp(10px, 1.6vw, 16px);
+    height: 10px;
+    background: var(--acc);
+    opacity: 0;
+  }
+  .slot:global(.is-loading) .loading {
+    opacity: 1;
+  }
+  .slot:global(.is-loading) .loading-bar span {
+    animation: block 0.01s linear forwards;
+    animation-delay: calc(var(--k) * 0.06s);
+  }
+  @keyframes block {
+    to {
+      opacity: 1;
+    }
+  }
+  /* Then everything fades to black, as on the main menu. */
+  .saves:global(.is-loading)::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: #04050c;
+    animation: to-black 0.35s ease-in 0.6s both;
+  }
+  @keyframes to-black {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* ── Key hints along the bottom ─────────────────────────────── */
+  .keys {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: auto;
+    padding-top: 1.75rem;
+    color: var(--dusk);
+    font-size: 0.85rem;
+    text-shadow: var(--hard);
+  }
+  .keys > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  /* ── Phones and touch ───────────────────────────────────────── */
+  @media (hover: none) {
+    .keys {
+      display: none;
+    }
+    .back .key {
+      display: none;
+    }
+    .back::before {
+      content: "◀";
+      font-size: 0.8rem;
+    }
+  }
+  @media (max-width: 640px) {
+    .slots {
+      padding-left: 0;
+    }
+    .cursor {
+      display: none;
+    }
+    .slot {
+      grid-template-columns: 5rem 1fr;
+      grid-template-rows: auto auto;
+      padding: 0.55rem 0.75rem 0.55rem 0.55rem;
+    }
+    .slot.is-active {
+      transform: none;
+    }
+    .thumb {
+      grid-row: 1 / 3;
+      align-self: start;
+    }
+    .stats {
+      flex-direction: row;
+      align-items: baseline;
+      gap: 0.4rem;
+      grid-column: 2;
+      margin-top: 0.3rem;
+    }
+    .count {
+      font-size: 1rem;
+    }
+    .unit {
+      margin: 0;
+      font-size: 0.7rem;
+    }
+    .where {
+      white-space: normal;
+    }
+  }
+  @media (hover: none), (max-width: 640px) {
+    .thumb {
+      filter: none;
+    }
+    .slot {
+      color: var(--moon);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slots li,
+    .slot.is-active .cursor {
+      animation: none;
+    }
+  }
+</style>

@@ -1,0 +1,847 @@
+---
+/**
+ * Contact: an American Psycho reference, shown as an in-game "item
+ * inspect" screen. The card itself is real-looking letterpress on bone
+ * paper, laid out like Paul Allen's: email where the phone number goes, the
+ * site as the "firm", name and title in the middle, city and links along
+ * the bottom. It tilts toward the pointer on desktop. Behind it is the main
+ * menu's pixel seaside scene (day or night), dimmed, and under it a navy
+ * item window in the menu's pixel font: "Item obtained: Business card".
+ */
+import { Font } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import NightScene from "@/components/home/NightScene.astro";
+import config from "@/config";
+
+const mail = config.socials.find(s => s.name === "mail")?.url ?? "mailto:hi@bgokul.com";
+const email = mail.replace("mailto:", "");
+const linkedin = config.socials.find(s => s.name === "linkedin")?.url;
+
+// Last part of each URL, shown on the card like a fax or telex number.
+const handle = (url?: string) => url?.replace(/\/+$/, "").split("/").pop() ?? "";
+
+// Paper, drawn as lit SVG noise so it has real bumps and shadows.
+const svg = (s: string) => `url("data:image/svg+xml,${encodeURIComponent(s)}")`;
+// Fine fibres: noise used as a height map, lit from the top left.
+const fibres = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='p' x='0' y='0'><feTurbulence type='fractalNoise' baseFrequency='0.6875' numOctaves='5' seed='7' stitchTiles='stitch'/><feDiffuseLighting lighting-color='#ffffff' surfaceScale='1.7'><feDistantLight azimuth='225' elevation='58'/></feDiffuseLighting></filter><rect width='100%' height='100%' filter='url(#p)'/></svg>`
+);
+// Soft mottling, like cotton stock.
+const mottle = svg(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='m'><feTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='4' seed='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.43 0 0 0 0 0.4 0 0 0 1.1 -0.3'/></filter><rect width='100%' height='100%' filter='url(#m)'/></svg>`
+);
+
+---
+
+<Layout title={`Contact | ${config.site.title}`} description="Email, LinkedIn and GitHub for Gokul, game designer.">
+  <Fragment slot="head">
+    <Font cssVariable="--font-card" preload={[{ subset: "latin", weight: 500, style: "normal" }]} />
+  </Fragment>
+
+  <Header wide />
+
+  <!-- Letterpress filter: shades the top inside of each letter (the paper
+       wall above the ink), adds a light lip under it and a thin shadow
+       over it, so the type reads as pressed into the card. -->
+  <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+    <filter id="press" x="-5%" y="-20%" width="110%" height="140%">
+      <feComponentTransfer in="SourceAlpha" result="hole">
+        <feFuncA type="table" tableValues="1 0" />
+      </feComponentTransfer>
+      <feOffset in="hole" dy="1.6" result="holeDown" />
+      <feGaussianBlur in="holeDown" stdDeviation="0.9" result="holeBlur" />
+      <feComposite in="holeBlur" in2="SourceAlpha" operator="in" result="innerMask" />
+      <feFlood flood-color="#000" flood-opacity="0.85" />
+      <feComposite in2="innerMask" operator="in" result="inner" />
+
+      <feOffset in="SourceAlpha" dy="1.3" result="down" />
+      <feComposite in="down" in2="SourceAlpha" operator="out" result="lipMask" />
+      <feGaussianBlur in="lipMask" stdDeviation="0.35" result="lipSoft" />
+      <feFlood flood-color="#fff" flood-opacity="0.7" />
+      <feComposite in2="lipSoft" operator="in" result="lip" />
+
+      <feOffset in="SourceAlpha" dy="-0.8" result="up" />
+      <feComposite in="up" in2="SourceAlpha" operator="out" result="wallMask" />
+      <feGaussianBlur in="wallMask" stdDeviation="0.5" result="wallSoft" />
+      <feFlood flood-color="#3a352c" flood-opacity="0.5" />
+      <feComposite in2="wallSoft" operator="in" result="wall" />
+
+      <feMerge>
+        <feMergeNode in="lip" />
+        <feMergeNode in="wall" />
+        <feMergeNode in="SourceGraphic" />
+        <feMergeNode in="inner" />
+      </feMerge>
+    </filter>
+  </svg>
+
+  <!-- The main menu's scene, dimmed, fixed behind the whole page. -->
+  <div class="desk" aria-hidden="true">
+    <NightScene />
+    <div class="dim"></div>
+  </div>
+
+  <main id="main-content" class="stage">
+    <div class="tilt" data-tilt>
+      <!-- The inspect reticle and sparkles: game UI around the card, never on it. -->
+      <span class="corner tl" aria-hidden="true"></span>
+      <span class="corner tr" aria-hidden="true"></span>
+      <span class="corner bl" aria-hidden="true"></span>
+      <span class="corner br" aria-hidden="true"></span>
+      <span class="spark s1" aria-hidden="true"></span>
+      <span class="spark s2" aria-hidden="true"></span>
+      <span class="spark s3" aria-hidden="true"></span>
+      <article class="card" aria-label="Business card" style={`--fibres: ${fibres}; --mottle: ${mottle}`}>
+        <a href={mail} class="phone">{email}</a>
+
+        <p class="firm">
+          <a href="/" class="firm-name">BGOKUL<span class="amp">.</span>COM</a>
+          <span class="firm-line">Games and stories</span>
+        </p>
+
+        <div class="who">
+          <h1>Gokul Naga Sai</h1>
+          <p class="title">Game Designer</p>
+        </div>
+
+        <div class="foot">
+          <p class="addr">Hyderabad, India</p>
+          <p class="lines">
+            {linkedin && (
+              <a href={linkedin} target="_blank" rel="noopener noreferrer">
+                <b>LinkedIn</b> <span class="val">{handle(linkedin)}</span>
+              </a>
+            )}
+          </p>
+        </div>
+      </article>
+    </div>
+
+    <!-- The item window, like picking something up in an RPG. -->
+    <div class="item">
+      <p class="item-kicker"><span aria-hidden="true">✦</span> Item obtained</p>
+      <p class="item-name">Business card</p>
+      <p class="item-desc">"Look at that subtle off-white coloring. The tasteful thickness of it."</p>
+      <div class="item-actions">
+        <a href={mail} class="act act--main" data-act>
+          <span class="act-mark" aria-hidden="true">▶</span>Use
+          <span class="act-hint">Send an email</span>
+        </a>
+        <button type="button" class="act" data-act data-copy={email}>
+          <span class="act-mark" aria-hidden="true">▶</span><span data-copy-label>Copy mail address</span>
+        </button>
+        {linkedin && (
+          <a href={linkedin} class="act" data-act target="_blank" rel="noopener noreferrer">
+            <span class="act-mark" aria-hidden="true">▶</span>LinkedIn
+          </a>
+        )}
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { sfx, itemGet } from "@/components/home/bootSound";
+  import { unlock } from "@/scripts/achievements";
+
+  let cleanup: (() => void) | null = null;
+
+  // Desktop only: the card leans toward the pointer, like it's being
+  // held up to the light. Transform only, so it stays smooth.
+  function initTilt() {
+    const el = document.querySelector<HTMLElement>("[data-tilt]");
+    if (!el || el.dataset.ready) return;
+    el.dataset.ready = "1";
+    if (!matchMedia("(hover: hover) and (prefers-reduced-motion: no-preference)").matches) return;
+
+    const ac = new AbortController();
+    let raf = 0;
+    window.addEventListener(
+      "pointermove",
+      e => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          const x = e.clientX / innerWidth - 0.5;
+          const y = e.clientY / innerHeight - 0.5;
+          el.style.setProperty("--ry", `${(x * 17).toFixed(2)}deg`);
+          el.style.setProperty("--rx", `${(-y * 13).toFixed(2)}deg`);
+          // The shadow falls away from the raised edge.
+          el.style.setProperty("--sx", `${(-x * 28).toFixed(1)}px`);
+          el.style.setProperty("--sy", `${(30 - y * 20).toFixed(1)}px`);
+          el.style.setProperty("--gx", `${(50 + x * 60).toFixed(1)}%`);
+          el.style.setProperty("--gy", `${(50 + y * 60).toFixed(1)}%`);
+        });
+      },
+      { signal: ac.signal }
+    );
+    cleanup = () => {
+      ac.abort();
+      cancelAnimationFrame(raf);
+    };
+  }
+
+  // How wide a scrollbar is in this browser (0 where they overlay, like
+  // phones and macOS), so the top bar can line up with other pages.
+  function measureScrollbar() {
+    if (!document.querySelector(".desk")) return;
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;top:-999px;width:100px;height:100px;overflow:scroll";
+    document.body.append(probe);
+    const width = probe.offsetWidth - probe.clientWidth;
+    probe.remove();
+    document.documentElement.style.setProperty("--sbw", `${width}px`);
+  }
+
+  // The item window's actions: a soft bell on use (if the visitor has
+  // sound on), and "Copy mail address" copies the email, with a moment of
+  // "Copied!" feedback.
+  const soundOn = () => {
+    try {
+      return localStorage.getItem("titleSound") !== "off";
+    } catch {
+      return false;
+    }
+  };
+  // The item's actions are a menu: ←/→ (or ↑/↓) move the ▶ between Use,
+  // Copy mail address and LinkedIn; Enter picks the selected one.
+  function initMenu() {
+    const acts = [...document.querySelectorAll<HTMLElement>("[data-act]")];
+    if (!acts.length || acts[0].dataset.menu) return;
+    acts[0].dataset.menu = "1";
+    let cur = 0;
+    const select = (i: number, focus = true) => {
+      cur = (i + acts.length) % acts.length;
+      acts.forEach((a, k) => a.classList.toggle("is-sel", k === cur));
+      if (focus) acts[cur].focus({ preventScroll: true });
+    };
+    select(0, false);
+    acts.forEach((a, i) => {
+      a.addEventListener("pointerenter", () => select(i, false));
+      a.addEventListener("focus", () => select(i, false));
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+      const back = e.key === "ArrowLeft" || e.key === "ArrowUp";
+      const fwd = e.key === "ArrowRight" || e.key === "ArrowDown";
+      if (back || fwd) {
+        e.preventDefault();
+        select(cur + (fwd ? 1 : -1));
+        if (allowedNow()) sfx([880], 0, 0.03);
+      } else if (e.key === "Enter" && !(e.target as HTMLElement).closest("a, button")) {
+        e.preventDefault();
+        acts[cur].click();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    const off = () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("astro:before-swap", off);
+    };
+    document.addEventListener("astro:before-swap", off);
+  }
+
+  // Leaving: the card is stowed in the inventory. The item window snaps
+  // shut, and the card spins, shrinks and arcs up into the "Business card"
+  // window in the corner (where you are), with a sparkle as it lands. All
+  // during the usual fade, with the falling "put away" bells.
+  function stowCard() {
+    const card = document.querySelector<HTMLElement>(".tilt");
+    const target = document.querySelector<HTMLElement>(".sys-name");
+    const item = document.querySelector<HTMLElement>(".item");
+    if (!card || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    item?.animate(
+      [{ transform: "none", opacity: 1 }, { transform: "scaleY(0.02)", opacity: 0.6, offset: 0.8 }, { transform: "scaleY(0)", opacity: 0 }],
+      { duration: 200, easing: "cubic-bezier(0.5, 0, 0.75, 0)", fill: "forwards" }
+    );
+    const c = card.getBoundingClientRect();
+    const t = target?.getBoundingClientRect() ?? { left: innerWidth - 60, top: 20, width: 40, height: 20 };
+    const dx = t.left + t.width / 2 - (c.left + c.width / 2);
+    const dy = t.top + t.height / 2 - (c.top + c.height / 2);
+    card.animate(
+      [
+        { transform: "none", offset: 0 },
+        // A little lift first, like it's picked up…
+        { transform: "translate(0, -14px) scale(0.92) rotate(-4deg)", offset: 0.2, easing: "cubic-bezier(0.55, 0, 0.8, 0.4)" },
+        // …then into the pocket.
+        { transform: `translate(${dx}px, ${dy}px) scale(0.04) rotate(200deg)`, offset: 1 },
+      ],
+      { duration: 360, easing: "linear", fill: "forwards" }
+    );
+    // The sparkle where it lands.
+    if (target) {
+      const s = document.createElement("span");
+      s.className = "stow-spark";
+      Object.assign(s.style, { left: `${t.left + t.width / 2}px`, top: `${t.top + t.height / 2}px` });
+      document.body.append(s);
+      window.setTimeout(() => s.remove(), 800);
+    }
+  }
+
+  function initActions() {
+    const acts = [...document.querySelectorAll<HTMLElement>("[data-act]")];
+    if (!acts.length || acts[0].dataset.ready) return;
+    acts.forEach(a => {
+      a.dataset.ready = "1";
+      a.addEventListener("click", () => {
+        if (soundOn()) sfx([880, 1318.51], 0.08, 0.05);
+        // LinkedIn: networking. Email (Use) or copying the address: pen pal.
+        unlock(a.getAttribute("href")?.includes("linkedin") ? "networking" : "pen-pal");
+      });
+    });
+    const copy = document.querySelector<HTMLButtonElement>("[data-copy]");
+    const label = copy?.querySelector<HTMLElement>("[data-copy-label]");
+    let t = 0;
+    copy?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(copy.dataset.copy ?? "");
+        label!.textContent = "Copied!";
+      } catch {
+        label!.textContent = copy.dataset.copy ?? "";
+      }
+      window.clearTimeout(t);
+      t = window.setTimeout(() => (label!.textContent = "Copy mail address"), 1800);
+    });
+  }
+
+  document.addEventListener("astro:page-load", () => {
+    measureScrollbar();
+    initTilt();
+    initActions();
+    initMenu();
+    // "Item obtained": the fanfare as the card lands, if the visitor has
+    // sound on (and has pressed something, so the browser allows it).
+    let allowed = false;
+    try {
+      allowed = localStorage.getItem("titleSound") !== "off" && (navigator.userActivation?.hasBeenActive ?? false);
+    } catch {}
+    if (allowed && document.querySelector(".card")) jingle = window.setTimeout(itemGet, 600);
+    // "Item obtained" for real: after its fanfare, so the two don't overlap.
+    if (document.querySelector(".card")) achTimer = window.setTimeout(() => unlock("item-get"), 1900);
+    // Leaving (◀ Main menu or Esc): the card is put away. The fanfare's
+    // notes, falling and soft.
+    if (document.querySelector(".card") && !stowBound) {
+      stowBound = true;
+      document.addEventListener("sys:leaving", () => {
+        if (!document.querySelector(".card")) return;
+        stowCard();
+        if (allowedNow()) sfx([1318.51, 1108.73, 880], 0.075, 0.035);
+      });
+    }
+  });
+  let stowBound = false;
+  const allowedNow = () => {
+    try {
+      return localStorage.getItem("titleSound") !== "off" && (navigator.userActivation?.hasBeenActive ?? false);
+    } catch {
+      return false;
+    }
+  };
+  let jingle = 0;
+  let achTimer = 0;
+  document.addEventListener("astro:before-swap", () => {
+    window.clearTimeout(jingle);
+    window.clearTimeout(achTimer);
+    cleanup?.();
+    cleanup = null;
+    document.documentElement.style.removeProperty("--sbw");
+  });
+</script>
+
+<style>
+  .stage {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(1.4rem, 3vh, 2.2rem);
+    padding: clamp(2.5rem, 7vh, 5rem) 1rem;
+  }
+  /* Behind the card: the main menu's scene, dimmed towards the edges so
+     the card is the brightest thing on screen. */
+  .desk {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #04050c;
+  }
+  .dim {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 65% at 50% 48%, rgb(4 5 12 / 0.45), rgb(4 5 12 / 0.8) 100%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+  }
+  :global(html[data-scene="day"]) .dim {
+    background:
+      radial-gradient(ellipse 60% 65% at 50% 48%, rgb(10 22 50 / 0.2), rgb(10 22 50 / 0.5) 100%),
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.05) 0 1px, transparent 1px 3px);
+  }
+  /* This page is one scene: the top bar sits on the desk with no divider,
+     and nothing scrolls, so there's no scrollbar. Other pages always keep
+     a scrollbar, which narrows the space their top bar is centred in; the
+     script measures that width (--sbw) and the bar here is padded by the
+     same amount, so it lines up with Portfolio and Resume exactly. */
+  :global(html:has(.desk)) {
+    overflow-y: auto;
+  }
+  :global(body:has(.desk) > header) {
+    border-color: transparent;
+    padding-right: var(--sbw, 0px);
+  }
+  /* Sized by the screen height so it's the hero on big monitors too. */
+  .tilt {
+    position: relative;
+    width: min(100%, 900px, 50svh * 1.75);
+    perspective: 1400px;
+  }
+  /* The inspect reticle: amber pixel corner brackets that snap in around
+     the card once it lands (in a few hard steps, like a game cursor
+     locking on), then breathe. They frame the card; they never touch it. */
+  .corner {
+    --len: clamp(16px, 2.6vw, 28px);
+    position: absolute;
+    z-index: 2;
+    width: var(--len);
+    height: var(--len);
+    border: 0 solid #ffd27a;
+    filter: drop-shadow(3px 3px 0 rgb(3 4 14 / 0.8));
+    pointer-events: none;
+    animation:
+      lock 0.36s steps(3) 0.55s backwards,
+      breathe 2.4s ease-in-out 1.2s infinite;
+  }
+  .tl {
+    --ox: -14px;
+    --oy: -14px;
+    top: -16px;
+    left: -16px;
+    border-top-width: 4px;
+    border-left-width: 4px;
+  }
+  .tr {
+    --ox: 14px;
+    --oy: -14px;
+    top: -16px;
+    right: -16px;
+    border-top-width: 4px;
+    border-right-width: 4px;
+  }
+  .bl {
+    --ox: -14px;
+    --oy: 14px;
+    bottom: -16px;
+    left: -16px;
+    border-bottom-width: 4px;
+    border-left-width: 4px;
+  }
+  .br {
+    --ox: 14px;
+    --oy: 14px;
+    bottom: -16px;
+    right: -16px;
+    border-bottom-width: 4px;
+    border-right-width: 4px;
+  }
+  @keyframes lock {
+    from {
+      opacity: 0;
+      transform: translate(var(--ox), var(--oy));
+    }
+  }
+  @keyframes breathe {
+    50% {
+      opacity: 0.55;
+    }
+  }
+
+  /* Pixel sparkles: small four-point stars that twinkle at the card's
+     edges now and then, like a rare item glinting. Built from square
+     "pixels" (box-shadows) so they match the pixel scene. */
+  .spark {
+    --p: 4px;
+    position: absolute;
+    z-index: 2;
+    width: var(--p);
+    height: var(--p);
+    background: #ffffff;
+    box-shadow:
+      0 calc(var(--p) * -1) #ffd27a,
+      0 var(--p) #ffd27a,
+      calc(var(--p) * -1) 0 #ffd27a,
+      var(--p) 0 #ffd27a,
+      0 calc(var(--p) * -2) rgb(255 210 122 / 0.45),
+      0 calc(var(--p) * 2) rgb(255 210 122 / 0.45),
+      calc(var(--p) * -2) 0 rgb(255 210 122 / 0.45),
+      calc(var(--p) * 2) 0 rgb(255 210 122 / 0.45);
+    opacity: 0;
+    pointer-events: none;
+    animation: twinkle 3.6s steps(1) infinite;
+  }
+  .s1 {
+    top: -30px;
+    right: 9%;
+    animation-delay: 0.75s;
+  }
+  .s2 {
+    bottom: 22%;
+    left: -32px;
+    animation-delay: 1.9s;
+  }
+  .s3 {
+    top: 34%;
+    right: -32px;
+    animation-delay: 2.9s;
+  }
+  /* Phones: the card nearly fills the width, so the side sparkles sit
+     closer in (32px out would push the page wider than the screen). */
+  @media (max-width: 640px) {
+    .s2 {
+      left: -12px;
+    }
+    .s3 {
+      right: -12px;
+    }
+  }
+  @keyframes twinkle {
+    0% {
+      opacity: 1;
+      transform: scale(0.5);
+    }
+    5% {
+      transform: scale(1);
+    }
+    12% {
+      opacity: 0.6;
+      transform: scale(0.5);
+    }
+    16%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* The card: bone stock, deep letterpress. Sizes are in card widths
+     (cqw) so it keeps its proportions on any screen. */
+  .card {
+    --ink: #2d2a2e;
+    container-type: inline-size;
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto 1fr auto;
+    aspect-ratio: 3.5 / 2;
+    padding: 8% 8.5% 7.5%;
+    background-color: #efede9;
+    color: var(--ink);
+    font-family: var(--font-card), "Futura", system-ui, sans-serif;
+    /* The tasteful thickness: a stack of paper edges under the card. */
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 0.6) inset,
+      0 -1px 0 rgb(0 0 0 / 0.08) inset,
+      0 1px 0 #d6d2ca,
+      0 2px 0 #c9c4bb,
+      0 3px 0 #bcb7ad,
+      0 4px 0 #aea99f,
+      0 5px 4px rgb(0 0 0 / 0.45),
+      var(--sx, 0px) var(--sy, 30px) 60px -18px rgb(0 0 0 / 0.85);
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+    animation: deal 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  /* Paper grain, then a soft light that follows the tilt. */
+  .card::before,
+  .card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  /* Fibres and mottling multiplied into the stock. */
+  .card::before {
+    background-image: var(--fibres), var(--mottle);
+    background-size: 320px 320px, 600px 600px;
+    mix-blend-mode: multiply;
+    opacity: 0.42;
+  }
+  .card::after {
+    background: radial-gradient(70% 90% at var(--gx, 35%) var(--gy, 25%), rgb(255 255 255 / 0.28), transparent 60%),
+      linear-gradient(180deg, transparent 70%, rgb(0 0 0 / 0.06));
+  }
+  @keyframes deal {
+    from {
+      opacity: 0;
+      transform: translateY(24px) rotateX(18deg);
+    }
+  }
+
+  /* Letterpress: ink pressed into the paper, lit from above. The top edge
+     of each letter falls into shadow, the bottom edge catches the light,
+     and the paper dips slightly around it. */
+  .card :is(.phone, .firm, .who, .foot) {
+    position: relative;
+    z-index: 1;
+    color: var(--ink);
+    filter: url(#press);
+  }
+  .card a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .card a:hover,
+  .card a:focus-visible {
+    outline: none;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+  }
+
+  .phone {
+    align-self: start;
+    font-size: 3.5cqw;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    /* Bigger tap area without moving the text. */
+    padding: 1.5cqw;
+    margin: -1.5cqw;
+  }
+  .firm {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin: 0;
+    text-transform: uppercase;
+    line-height: 1.05;
+  }
+  .firm-name {
+    font-size: 4.9cqw;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .amp {
+    font-size: 0.8em;
+  }
+  .firm-line {
+    margin-top: 0.4cqw;
+    font-size: 2.4cqw;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .who {
+    grid-column: 1 / -1;
+    align-self: center;
+    text-align: center;
+  }
+  h1 {
+    margin: 0;
+    font-size: 5.3cqw;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+  .title {
+    margin: 0.8cqw 0 0;
+    font-size: 3.7cqw;
+    font-weight: 400;
+  }
+  .foot {
+    grid-column: 1 / -1;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .addr,
+  .lines {
+    margin: 0;
+    font-size: 3.4cqw;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .lines {
+    display: flex;
+    justify-content: center;
+    gap: 3cqw;
+    margin-top: 1.2cqw;
+  }
+  .lines a {
+    padding: 1.5cqw 0;
+    margin: -1.5cqw 0;
+  }
+  .lines b {
+    font-weight: 600;
+  }
+  /* Like FAX and its number: bold label, smaller value. */
+  .lines .val {
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  /* The item window: a navy JRPG box like the save files, set in the menu's
+     pixel font, as wide as the card. */
+  .item {
+    position: relative;
+    width: min(100%, 900px, 50svh * 1.75);
+    padding: 0.85rem 1.2rem 1rem;
+    border: 3px solid rgb(154 160 214 / 0.45);
+    border-radius: 6px;
+    background: linear-gradient(180deg, rgb(32 38 104 / 0.92) 0%, rgb(14 17 56 / 0.92) 100%);
+    box-shadow:
+      inset 0 0 0 2px rgb(5 6 20 / 0.85),
+      5px 5px 0 rgb(3 4 14 / 0.85);
+    color: #efecdc;
+    font-family: var(--font-pixel), monospace;
+    font-variant-ligatures: none;
+    text-shadow: 0.07em 0.07em 0 rgb(5 6 20 / 0.9);
+    animation: item-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.45s backwards;
+  }
+  @keyframes item-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+  .item-kicker {
+    margin: 0;
+    color: #ffd27a;
+    font-size: 0.75rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .item-name {
+    margin: 0.2rem 0 0;
+    font-size: 1.35rem;
+    font-weight: 600;
+  }
+  .item-desc {
+    margin: 0.35rem 0 0;
+    color: rgb(239 236 220 / 0.75);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  /* Actions, like an RPG item menu, with a ▶ cursor and amber on the one
+     you're on. "Use" (email) is first and brightest. */
+  .item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.6rem;
+    margin-top: 0.8rem;
+    padding-top: 0.7rem;
+    border-top: 2px solid rgb(154 160 214 / 0.2);
+  }
+  .act {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.35rem 0;
+    border: 0;
+    background: none;
+    color: rgb(239 236 220 / 0.7);
+    font: inherit;
+    font-size: 1.05rem;
+    text-decoration: none;
+    text-shadow: inherit;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .act--main {
+    color: #efecdc;
+  }
+  /* inline-block: the focus underline (on .act) stays on the words and
+     never runs under the ▶ or the hint. */
+  .act-mark {
+    display: inline-block;
+    color: #ffd27a;
+    font-size: 0.7rem;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity 0.15s,
+      transform 0.15s;
+  }
+  .act-hint {
+    display: inline-block;
+    color: #9aa0d6;
+    font-size: 0.8rem;
+  }
+  .act:hover,
+  .act:focus-visible,
+  .act:global(.is-sel) {
+    outline: none;
+    color: #ffd27a;
+  }
+  .act:hover .act-mark,
+  .act:focus-visible .act-mark,
+  .act:global(.is-sel) .act-mark {
+    opacity: 1;
+    transform: none;
+  }
+  /* The sparkle where the stowed card lands (made on leaving). */
+  :global(.stow-spark) {
+    position: fixed;
+    z-index: 210;
+    width: 4px;
+    height: 4px;
+    margin: -2px 0 0 -2px;
+    background: #fff;
+    box-shadow:
+      0 -4px #ffd27a,
+      0 4px #ffd27a,
+      -4px 0 #ffd27a,
+      4px 0 #ffd27a,
+      0 -8px rgb(255 210 122 / 0.5),
+      0 8px rgb(255 210 122 / 0.5),
+      -8px 0 rgb(255 210 122 / 0.5),
+      8px 0 rgb(255 210 122 / 0.5);
+    pointer-events: none;
+    opacity: 0;
+    animation: stow-spark 0.45s steps(1) 0.3s;
+  }
+  @keyframes stow-spark {
+    0% {
+      opacity: 1;
+      transform: scale(0.6);
+    }
+    30% {
+      opacity: 1;
+      transform: scale(1.3);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(0.8);
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  .act:focus-visible {
+    text-decoration: underline dashed;
+    text-underline-offset: 5px;
+  }
+  /* Touch: no hover, so show "Use" as already selected. */
+  @media (hover: none) {
+    .act--main {
+      color: #ffd27a;
+    }
+    .act--main .act-mark {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spark {
+      display: none;
+    }
+    .corner,
+    .item,
+    .card {
+      animation: none;
+      transition: none;
+    }
+  }
+</style>

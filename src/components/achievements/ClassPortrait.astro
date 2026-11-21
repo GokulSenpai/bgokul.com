@@ -1,0 +1,384 @@
+---
+/**
+ * The visitor's class as a little pixel-art party member, JRPG style.
+ *
+ * One hooded figure, dressed by the script on the Achievements screen:
+ * - data-l / data-r: the prop in each hand (scholar: a book, gamer: a
+ *   gamepad, tinkerer: a wrench, wanderer: a lantern, bard: a lute). A
+ *   single class holds its prop in the right hand; a dual class holds
+ *   both, so every combination looks different.
+ * - --robe / --trim: the main class's colour, and the second class's on
+ *   the sash.
+ * - data-plat: the platinum, Keeper of the Light: a gold robe, a halo, a
+ *   gold lantern and sparkles.
+ * - data-none: nothing found yet, a grey figure with a "?".
+ *
+ * Every part has a subtle loop: the figure breathes (a two-frame bob), the
+ * book's page flips, the gamepad's button blinks, the wrench wiggles, the
+ * lantern glows, a note floats up from the lute. Still with reduced motion.
+ */
+type Grid = string[];
+const W = 24;
+
+// The figure: H hood, K skin, E eyes, R robe, S robe shade, T sash, F feet.
+const BODY: Grid = [
+  "",
+  "",
+  "",
+  ".........HHHHHH",
+  "........HHHHHHHH",
+  "........HHKKKKHH",
+  "........HKEKKEKH",
+  "........HKKKKKKH",
+  "........HHKKKKHH",
+  ".........HHHHHH",
+  "........RRRRRRRR",
+  ".......RRRRTRRRRR",
+  "......SRRRRRTRRRRS",
+  "......SRRRRRRTRRRS",
+  "......KRRRRRRRTRRK",
+  ".......RRRRRRRRTR",
+  ".......RRRRRRRRRR",
+  "......RRRRRRRRRRRR",
+  "......SSSSSSSSSSSS",
+  "........FF....FF",
+];
+const BODY_FILL: Record<string, string> = {
+  H: "var(--hood)",
+  K: "#f1c9a5",
+  E: "#2b2724",
+  R: "var(--robe)",
+  S: "var(--shade)",
+  T: "var(--trim)",
+  F: "#2b2724",
+};
+
+// Props, 6x6, each held at the hand (left: x 1, right: x 17; y 11).
+const PROPS: Record<string, { grid: Grid; fill: Record<string, string> }> = {
+  scholar: {
+    grid: ["......", "......", "bbbbbb", "bpp1pb", "bp1ppb", "bbbbbb"],
+    fill: { b: "#7a4a2a", p: "#f4eedb", "1": "#7d95c8" },
+  },
+  gamer: {
+    grid: ["......", "......", "......", "dddddd", "dlddrd", ".d..d."],
+    fill: { d: "#3a3f5c", l: "#9aa8ff", r: "#ef6b6b" },
+  },
+  tinkerer: {
+    grid: [".m.m..", ".mmm..", "..m...", "..m...", "..M...", "..M..."],
+    fill: { m: "#c9ccd6", M: "#6d7280" },
+  },
+  wanderer: {
+    grid: ["..k...", ".kkk..", ".kyk..", ".yyy..", ".kyk..", ".kkk.."],
+    fill: { k: "#3a3f5c", y: "#ffd27a" },
+  },
+  bard: {
+    grid: ["....n.", "...n..", ".oon..", "ooso..", "oooo..", ".oo..."],
+    fill: { o: "#b07a3c", n: "#6a4424", s: "#2b2724" },
+  },
+};
+
+const rects = (grid: Grid, fill: Record<string, string>, x0 = 0, y0 = 0) =>
+  grid.flatMap((row, y) =>
+    [...row.padEnd(W, ".").slice(0, W)].map((c, x) => (fill[c] ? { x: x0 + x, y: y0 + y, f: fill[c], c } : null)).filter(Boolean)
+  ) as { x: number; y: number; f: string; c: string }[];
+
+// The eyes are drawn on their own (over plain skin) so they can look about;
+// the sash pixels catch the light one after another.
+let sash = 0;
+const all = rects(BODY, BODY_FILL);
+const eyes = all.filter(r => r.c === "E");
+const body = all.map(r => ({
+  ...r,
+  f: r.c === "E" ? BODY_FILL.K : r.f,
+  cls: r.c === "T" ? "sash" : undefined,
+  delay: r.c === "T" ? `${0.12 * sash++}s` : undefined,
+}));
+const props = Object.entries(PROPS).map(([k, p]) => ({
+  k,
+  left: rects(p.grid, p.fill, 1, 11),
+  right: rects(p.grid, p.fill, 17, 11),
+}));
+---
+
+<div class="portrait" data-portrait data-none aria-hidden="true">
+  <svg viewBox="0 0 24 24" shape-rendering="crispEdges">
+    <!-- The platinum's sparkles and halo (hidden otherwise). -->
+    <g class="plat-only sparkles" fill="#fff1c4">
+      <rect x="3" y="4" width="1" height="1" /><rect x="20" y="7" width="1" height="1" />
+      <rect x="2" y="17" width="1" height="1" /><rect x="21" y="19" width="1" height="1" />
+    </g>
+    <!-- Nudged down two pixels: it reads as centred (the head has headroom). -->
+    <g transform="translate(0 2)"><g class="breathe">
+      <rect class="plat-only" x="10" y="1" width="4" height="1" fill="#ffd27a" />
+      {body.map(r => <rect class={r.cls} style={r.delay && `animation-delay: ${r.delay}`} x={r.x} y={r.y} width="1" height="1" fill={r.f} />)}
+      <!-- The eyes follow the cursor, a pixel at a time (script below). -->
+      <g class="eyes" data-eyes>
+        {eyes.map(r => <rect class="eye" x={r.x} y={r.y} width="1" height="1" fill={r.f} />)}
+      </g>
+      <!-- Nothing found yet: a "?" over the figure. -->
+      <g class="none-only" fill="#efecdc">
+        <rect x="11" y="0" width="2" height="1" /><rect x="13" y="1" width="1" height="1" /><rect x="12" y="2" width="1" height="1" />
+      </g>
+      {
+        props.map(p => (
+          <>
+            <g class:list={["prop", "l", `p-${p.k}`]}>
+              {p.k === "wanderer" && <circle class="glow" cx="3.5" cy="14" r="3.5" fill="#ffd27a" />}
+              {p.left.map(r => <rect class={r.f === "#ef6b6b" ? "blink" : r.f === "#7d95c8" ? "page" : undefined} x={r.x} y={r.y} width="1" height="1" fill={r.f} />)}
+              {p.k === "bard" && <rect class="note" x="5" y="9" width="1" height="1" fill="#f2a3c8" />}
+            </g>
+            <g class:list={["prop", "r", `p-${p.k}`]}>
+              {p.k === "wanderer" && <circle class="glow" cx="19.5" cy="14" r="3.5" fill="#ffd27a" />}
+              {p.right.map(r => <rect class={r.f === "#ef6b6b" ? "blink" : r.f === "#7d95c8" ? "page" : undefined} x={r.x} y={r.y} width="1" height="1" fill={r.f} />)}
+              {p.k === "bard" && <rect class="note" x="21" y="9" width="1" height="1" fill="#f2a3c8" />}
+            </g>
+          </>
+        ))
+      }
+    </g></g>
+  </svg>
+</div>
+
+<script>
+  // The eyes look towards the cursor (or a finger), straight ahead when it's
+  // over the face.
+  let ctrl: AbortController | null = null;
+
+  function init() {
+    ctrl?.abort();
+    const eyes = document.querySelector<SVGGElement>("[data-eyes]");
+    if (!eyes) return;
+    ctrl = new AbortController();
+    const svg = eyes.ownerSVGElement!;
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+    const look = () => {
+      frame = 0;
+      const box = svg.getBoundingClientRect();
+      // The middle of the face, in page pixels (face is at about 12, 7 of 24).
+      const unit = box.width / 24;
+      const dx = x - (box.left + 12 * unit);
+      const dy = y - (box.top + 7 * unit);
+      // Up to half a pixel towards the cursor, in any direction; the CSS
+      // transition glides them there.
+      let ex = 0;
+      let ey = 0;
+      if (Math.hypot(dx, dy) > 2 * unit) {
+        const a = Math.atan2(dy, dx);
+        ex = 0.5 * Math.cos(a);
+        ey = 0.5 * Math.sin(a);
+      }
+      eyes.style.transform = `translate(${ex.toFixed(2)}px, ${ey.toFixed(2)}px)`;
+    };
+    // Left alone for a few seconds, they lose interest and look ahead again.
+    let idle = 0;
+    window.addEventListener(
+      "pointermove",
+      e => {
+        x = e.clientX;
+        y = e.clientY;
+        frame ||= requestAnimationFrame(look);
+        clearTimeout(idle);
+        idle = window.setTimeout(() => (eyes.style.transform = ""), 4000);
+      },
+      { signal: ctrl.signal, passive: true }
+    );
+    ctrl.signal.addEventListener("abort", () => clearTimeout(idle));
+  }
+
+  document.addEventListener("astro:page-load", init);
+  document.addEventListener("astro:before-swap", () => ctrl?.abort());
+</script>
+
+<style>
+  .portrait {
+    --robe: #7d82a8;
+    --shade: #4d5276;
+    --hood: #5d628a;
+    --trim: #9aa0d6;
+    width: 100%;
+    aspect-ratio: 1;
+    border: 2px solid rgb(154 160 214 / 0.35);
+    border-radius: 4px;
+    background:
+      radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--robe) 22%, transparent), transparent 70%),
+      rgb(5 6 20 / 0.5);
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Only the props this visitor's class holds are shown. */
+  .prop,
+  .plat-only,
+  .none-only {
+    display: none;
+  }
+  .portrait[data-l="scholar"] .l.p-scholar,
+  .portrait[data-l="gamer"] .l.p-gamer,
+  .portrait[data-l="tinkerer"] .l.p-tinkerer,
+  .portrait[data-l="wanderer"] .l.p-wanderer,
+  .portrait[data-l="bard"] .l.p-bard,
+  .portrait[data-r="scholar"] .r.p-scholar,
+  .portrait[data-r="gamer"] .r.p-gamer,
+  .portrait[data-r="tinkerer"] .r.p-tinkerer,
+  .portrait[data-r="wanderer"] .r.p-wanderer,
+  .portrait[data-r="bard"] .r.p-bard {
+    display: inline;
+  }
+  .portrait[data-plat] .plat-only,
+  .portrait[data-none] .none-only {
+    display: inline;
+  }
+  .portrait[data-plat] {
+    border-color: #ffd27a;
+  }
+
+  /* ── the little loops ─────────────────────────────────────── */
+  /* Breathing: the figure swells gently from the feet up and settles, so
+     the feet stay planted and only the head and shoulders rise a touch. */
+  .breathe {
+    transform-box: view-box;
+    transform-origin: 12px 20px;
+    animation: breathe 4.2s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%,
+    100% {
+      transform: scale(1, 1);
+    }
+    45% {
+      transform: scale(1.015, 1.03);
+    }
+  }
+  /* The eyes glide to where they're looking. */
+  .eyes {
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* The eyes blink now and then (shut for a moment, skin over them). */
+  .eye {
+    animation: eye-blink 4s steps(1) infinite;
+  }
+  @keyframes eye-blink {
+    94% {
+      fill: #f1c9a5;
+    }
+    97% {
+      fill: #2b2724;
+    }
+  }
+  /* A glint runs down the sash, a pixel at a time. */
+  .sash {
+    animation: sash-glint 3.2s steps(1) infinite;
+  }
+  @keyframes sash-glint {
+    0% {
+      fill: color-mix(in srgb, var(--trim) 45%, #fff);
+    }
+    4% {
+      fill: var(--trim);
+    }
+  }
+  /* The book's page flips. */
+  .page {
+    animation: page 2.4s steps(1) infinite;
+  }
+  @keyframes page {
+    50% {
+      fill: #f4eedb;
+    }
+  }
+  /* The gamepad's button blinks. */
+  .blink {
+    animation: blink 1.2s steps(1) infinite;
+  }
+  @keyframes blink {
+    50% {
+      fill: #6b2b2b;
+    }
+  }
+  /* The wrench wiggles. */
+  .p-tinkerer {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: wiggle 2s steps(1) infinite;
+  }
+  @keyframes wiggle {
+    25% {
+      transform: rotate(-12deg);
+    }
+    50% {
+      transform: none;
+    }
+    75% {
+      transform: rotate(12deg);
+    }
+  }
+  /* The lantern's glow breathes softly. */
+  .glow {
+    opacity: 0.25;
+    animation: glow 2.6s ease-in-out infinite;
+  }
+  @keyframes glow {
+    50% {
+      opacity: 0.45;
+    }
+  }
+  /* A note floats up from the lute. */
+  .note {
+    animation: note 2.4s steps(4) infinite;
+  }
+  @keyframes note {
+    0% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-4px);
+      opacity: 0;
+    }
+  }
+  /* The platinum's sparkles twinkle in turn. */
+  .sparkles rect {
+    animation: twinkle 2.4s steps(1) infinite;
+  }
+  .sparkles rect:nth-child(2) {
+    animation-delay: 0.6s;
+  }
+  .sparkles rect:nth-child(3) {
+    animation-delay: 1.2s;
+  }
+  .sparkles rect:nth-child(4) {
+    animation-delay: 1.8s;
+  }
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    30% {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .breathe,
+    .eye,
+    .sash,
+    .page,
+    .blink,
+    .p-tinkerer,
+    .glow,
+    .note,
+    .sparkles rect {
+      animation: none;
+    }
+    .sparkles rect {
+      opacity: 1;
+    }
+  }
+</style>

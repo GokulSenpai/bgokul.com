@@ -1,0 +1,115 @@
+---
+/**
+ * Back to top, as a small HUD window like the rest of the site's game UI:
+ * "▲ Top" with a little block bar that fills in lamp amber as you scroll
+ * (a progress meter). Appears once you've scrolled a bit; a real button,
+ * so it's reachable by keyboard.
+ */
+import { useTranslations } from "@/i18n";
+
+const t = useTranslations(Astro.currentLocale);
+const blocks = Array.from({ length: 6 }, (_, k) => k);
+---
+
+<button type="button" class="btt" data-btt aria-label={t.post.backToTop}>
+  <span class="btt-arrow" aria-hidden="true">▲</span>
+  <span class="btt-label">Top</span>
+  <span class="btt-bar" aria-hidden="true">{blocks.map(() => <span />)}</span>
+</button>
+
+<script is:inline data-astro-rerun>
+  (() => {
+    const btn = document.querySelector("[data-btt]");
+    if (!btn) return;
+    const root = document.documentElement;
+    const cells = [...btn.querySelectorAll(".btt-bar span")];
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    btn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+      document.getElementById("main-content")?.focus?.({ preventScroll: true });
+    });
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const total = root.scrollHeight - root.clientHeight;
+      const p = total > 0 ? root.scrollTop / total : 0;
+      btn.classList.toggle("is-shown", p > 0.12);
+      const lit = Math.round(p * cells.length);
+      cells.forEach((c, i) => c.classList.toggle("on", i < lit));
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    document.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("astro:before-swap", () => document.removeEventListener("scroll", onScroll), { once: true });
+    update();
+  })();
+</script>
+
+<style>
+  .btt {
+    position: fixed;
+    right: 1rem;
+    bottom: 1.25rem;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 40px;
+    padding: 0 0.75rem;
+    border: 2px solid rgb(154 160 214 / 0.4);
+    border-radius: 4px;
+    background: rgb(12 14 42 / 0.9);
+    box-shadow: 3px 3px 0 rgb(3 4 14 / 0.75);
+    color: #efecdc;
+    font-family: var(--font-pixel), ui-monospace, monospace;
+    font-size: 0.85rem;
+    font-variant-ligatures: none;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
+    transition:
+      opacity 0.25s,
+      transform 0.25s,
+      border-color 0.15s,
+      color 0.15s;
+    backdrop-filter: blur(4px);
+  }
+  .btt:global(.is-shown) {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  .btt:hover,
+  .btt:focus-visible {
+    outline: none;
+    border-color: #ffd27a;
+    color: #ffd27a;
+  }
+  .btt-arrow {
+    font-size: 0.7rem;
+  }
+  .btt-bar {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border: 2px solid rgb(154 160 214 / 0.45);
+  }
+  .btt-bar span {
+    width: 6px;
+    height: 8px;
+    background: rgb(154 160 214 / 0.15);
+  }
+  .btt-bar span:global(.on) {
+    background: #ffd27a;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btt {
+      transition: none;
+    }
+  }
+</style>

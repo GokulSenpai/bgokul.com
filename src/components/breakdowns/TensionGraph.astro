@@ -1,0 +1,136 @@
+---
+/**
+ * Player tension (0-100) against pages collected (0-8), drawn as a
+ * stepped line in the page's own colours, with a note for each page
+ * underneath. Pure SVG, scales to the column.
+ */
+interface Props {
+  /** Tension at 0, 1, 2 … pages. */
+  points: number[];
+  /** Notes under the graph: [label, text], e.g. ["Pages 3-4", "…"]. */
+  notes?: [string, string][];
+}
+const { points, notes = [] } = Astro.props;
+
+const W = 640;
+const H = 300;
+const pad = { l: 44, r: 16, t: 16, b: 40 };
+const iw = W - pad.l - pad.r;
+const ih = H - pad.t - pad.b;
+const last = points.length - 1;
+const x = (i: number) => pad.l + (iw * i) / last;
+const y = (v: number) => pad.t + ih - (ih * v) / 100;
+const line = points.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+const area = `${line} L${x(last)},${y(0)} L${x(0)},${y(0)} Z`;
+const grid = [0, 25, 50, 75, 100];
+---
+
+<figure class="tension">
+  <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby="tension-title">
+    <title id="tension-title">
+      Player tension by pages collected: {points.map((v, i) => `${i} pages, ${v}`).join("; ")}.
+    </title>
+    {
+      grid.map(g => (
+        <>
+          <line class="grid" x1={pad.l} x2={W - pad.r} y1={y(g)} y2={y(g)} />
+          <text class="tick" x={pad.l - 10} y={y(g) + 4} text-anchor="end">{g}</text>
+        </>
+      ))
+    }
+    {
+      points.map((_, i) => (
+        <text class="tick" x={x(i)} y={H - pad.b + 20} text-anchor="middle">{i}</text>
+      ))
+    }
+    <path class="area" d={area} />
+    <path class="line" d={line} />
+    {
+      points.map((v, i) => (
+        <rect class="dot" x={x(i) - 4} y={y(v) - 4} width="8" height="8" />
+      ))
+    }
+    <text class="axis" x={pad.l + iw / 2} y={H - 4} text-anchor="middle">Pages collected</text>
+  </svg>
+  <figcaption>Player tension (0 to 100) against pages collected.</figcaption>
+  {
+    notes.length > 0 && (
+      <ol class="notes">
+        {notes.map(([label, text]) => (
+          <li>
+            <span class="pg">{label}</span>
+            <span>{text}</span>
+          </li>
+        ))}
+      </ol>
+    )
+  }
+</figure>
+
+<style>
+  .tension {
+    margin: 2rem 0 2.5rem;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .grid {
+    stroke: var(--bd-line, rgb(154 160 214 / 0.15));
+    stroke-width: 1;
+  }
+  .tick,
+  .axis {
+    fill: var(--bd-dim, rgb(154 160 214 / 0.7));
+    font-family: var(--font-pixel), monospace;
+    font-size: 12px;
+  }
+  .axis {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+  .area {
+    fill: var(--bd-accent, #f4b740);
+    opacity: 0.08;
+  }
+  .line {
+    fill: none;
+    stroke: var(--bd-strong, #fff);
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+  }
+  .dot {
+    fill: var(--bd-bg, #07081a);
+    stroke: var(--bd-strong, #fff);
+    stroke-width: 2;
+  }
+  figcaption {
+    margin-top: 0.75rem;
+    color: var(--bd-dim, rgb(154 160 214 / 0.7));
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  .notes {
+    margin: 1.5rem 0 0 !important;
+    padding: 0 !important;
+    list-style: none;
+  }
+  .notes li {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    gap: 1rem;
+    margin: 0 !important;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--bd-line, rgb(154 160 214 / 0.12));
+    font-size: 0.95em;
+  }
+  .pg {
+    color: var(--bd-accent, #f4b740);
+    font-family: var(--font-pixel), monospace;
+    font-size: 0.8rem;
+    padding-top: 0.25em;
+    white-space: nowrap;
+  }
+</style>

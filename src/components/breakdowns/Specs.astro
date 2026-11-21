@@ -1,0 +1,55 @@
+---
+/**
+ * A spec sheet: label on the left, value on the right (stacked on phones).
+ * For breakdown write-ups: a game's overview, a resource's rules, etc.
+ */
+interface Props {
+  items: [string, string][];
+}
+const { items } = Astro.props;
+---
+
+<dl class="specs">
+  {
+    items.map(([label, value]) => (
+      <div class="spec">
+        <dt>{label}</dt>
+        <dd>{value}</dd>
+      </div>
+    ))
+  }
+</dl>
+
+<style>
+  .specs {
+    margin: 1.5rem 0 2.25rem;
+    padding: 0;
+  }
+  .spec {
+    display: grid;
+    gap: 0.2rem 1.5rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--bd-line, rgb(154 160 214 / 0.15));
+  }
+  .spec:first-child {
+    border-top: 1px solid var(--bd-line, rgb(154 160 214 / 0.15));
+  }
+  @media (min-width: 640px) {
+    .spec {
+      grid-template-columns: 11rem minmax(0, 1fr);
+    }
+  }
+  dt {
+    color: var(--bd-label, #9aa0d6);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding-top: 0.3em;
+  }
+  dd {
+    margin: 0;
+    font-size: 0.98em;
+    line-height: 1.6;
+  }
+</style>

@@ -1,0 +1,386 @@
+---
+/**
+ * The Backrooms. An easter egg that deliberately breaks every rule of the
+ * site: no pixel font, no navy, no HUD, no Esc, no menu. A long corridor of
+ * yellow wallpaper, damp carpet and fluorescent panels, and one line of
+ * plain Times New Roman as if the styling never loaded, ending "Escape.".
+ * The only way out: press Esc three times (three quick taps on a phone), or
+ * the browser's back button. Arriving unlocks the "No-clip" achievement.
+ *
+ * Photosensitivity: nothing here flashes or strobes. The corridor is one
+ * still drawing (SVG, in one-point perspective) that sways very slowly, and
+ * the lights dim and recover softly every so often. Reduced motion: still.
+ *
+ * How you get here: refuse to continue on the Game Over (404) screen one
+ * time too many, or type `noclip` in the cmd terminal. Not on any map:
+ * left out of the sitemap and of search results.
+ */
+import Layout from "@/layouts/Layout.astro";
+
+---
+
+<Layout title="Level 0">
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+
+  <main class="backrooms" data-backrooms>
+    <canvas class="hall" data-hall aria-hidden="true"></canvas>
+    <div class="haze" aria-hidden="true"></div>
+    <div class="dim" aria-hidden="true"></div>
+
+    <!-- Unstyled on purpose. -->
+    <div class="unstyled">
+      <h1>Level 0</h1>
+      <p>You noclipped out of reality.</p>
+      <!-- The way out, as a hint: the Esc key, or on touch screens, taps. -->
+      <p><small>Escape.<span class="tap-hint"> Tap, tap, tap.</span></small></p>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { fluorescentHum } from "@/components/home/bootSound";
+  import { soundOn } from "@/scripts/cameFrom";
+  import { unlock } from "@/scripts/achievements";
+
+  let stopHum: (() => void) | null = null;
+  let stopWalk: (() => void) | null = null;
+
+  /**
+   * The corridor, walked forever. True one-point perspective: the eye at
+   * the origin looking down +Z, walls at X = ±1, ceiling and floor at
+   * Y = ∓0.8, one focal length for both axes so the hall keeps its shape on
+   * any screen (wide, tall or square). The world slides towards you: the
+   * wallpaper seams, ceiling lights and doorways come closer, grow, and
+   * slide off the edges of the screen (they're drawn right up to a near
+   * clip, so nothing pops out of view). Drawn fresh each frame with solid
+   * shapes, so it's smooth and never shimmers.
+   */
+  function walk(canvas: HTMLCanvasElement, still: boolean) {
+    const ctx = canvas.getContext("2d")!;
+    let w = 0, h = 0, cx = 0, cy = 0, f = 0;
+    const NEAR = 0.06; // the near clip: objects reach this off the screen edges
+    const FAR = 26;
+    const CEIL = -0.8, FLOOR = 0.8;
+    const size = () => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      w = canvas.width = Math.round(innerWidth * dpr);
+      h = canvas.height = Math.round(innerHeight * dpr);
+      cx = w / 2;
+      cy = h / 2;
+      // One focal length: a comfortable field of view on any shape of
+      // screen (narrow screens see a bit less of the walls, wide ones more).
+      f = 0.62 * Math.min(h, w * 0.95);
+    };
+    const P = (x: number, y: number, z: number) => [cx + (x * f) / z, cy + (y * f) / z] as const;
+    type Pt = readonly [number, number];
+    const poly = (pts: Pt[], fill: string | CanvasGradient) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
+      ctx.closePath();
+      ctx.fill();
+    };
+    // Darker with distance (0 near … 1 at the far end).
+    const fog = (z: number) => Math.min(1, Math.max(0, (z - 0.6) / (FAR * 0.55)));
+    const shade = (rgb: number[], z: number, a = 1) => {
+      const k = 1 - fog(z) * 0.72;
+      return `rgba(${Math.round(rgb[0] * k)}, ${Math.round(rgb[1] * k)}, ${Math.round(rgb[2] * k)}, ${a})`;
+    };
+    // A surface's gradient from near to far, matched to real depth (screen
+    // distance from the vanishing point goes as 1/z).
+    const ramp = (a: Pt, b: Pt, za: number, zb: number, rgb: number[]) => {
+      const g = ctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+      for (const s of [0, 0.25, 0.5, 0.75, 0.9, 1]) {
+        const inv = 1 / za - s * (1 / za - 1 / zb);
+        g.addColorStop(s, shade(rgb, 1 / inv));
+      }
+      return g;
+    };
+    const SPEED = 0.85; // world units per second: a slow, steady walk
+    let raf = 0;
+    let t0 = performance.now();
+
+    const frame = (now: number) => {
+      const o = still ? 0.3 : ((now - t0) / 1000) * SPEED;
+      const bob = still ? 0 : Math.sin(o * 2.4) * 0.012;
+      ctx.save();
+      ctx.translate(0, bob * h);
+      ctx.fillStyle = "#2f2912";
+      ctx.fillRect(0, -h, w, h * 3);
+
+      // Surfaces, from the near clip to the far end.
+      const R = 1.2; // gradients start from a point still on screen
+      const n = { tl: P(-1, CEIL, NEAR), tr: P(1, CEIL, NEAR), br: P(1, FLOOR, NEAR), bl: P(-1, FLOOR, NEAR) };
+      const fa = { tl: P(-1, CEIL, FAR), tr: P(1, CEIL, FAR), br: P(1, FLOOR, FAR), bl: P(-1, FLOOR, FAR) };
+      poly([n.tl, n.tr, fa.tr, fa.tl], ramp(P(0, CEIL, R), P(0, CEIL, FAR), R, FAR, [226, 218, 182]));
+      poly([n.bl, n.br, fa.br, fa.bl], ramp(P(0, FLOOR, R), P(0, FLOOR, FAR), R, FAR, [176, 156, 94]));
+      poly([n.tl, fa.tl, fa.bl, n.bl], ramp(P(-1, 0, R), P(-1, 0, FAR), R, FAR, [217, 200, 123]));
+      poly([n.tr, fa.tr, fa.br, n.br], ramp(P(1, 0, R), P(1, 0, FAR), R, FAR, [212, 195, 119]));
+      // Baseboards.
+      const BB = FLOOR - 0.07;
+      poly([P(-1, BB, NEAR), P(-1, BB, FAR), fa.bl, n.bl], ramp(P(-1, FLOOR, R), P(-1, FLOOR, FAR), R, FAR, [140, 124, 62]));
+      poly([P(1, BB, NEAR), P(1, BB, FAR), fa.br, n.br], ramp(P(1, FLOOR, R), P(1, FLOOR, FAR), R, FAR, [136, 120, 60]));
+      // The far end: murk.
+      ctx.fillStyle = "#2f2912";
+      ctx.fillRect(fa.tl[0], fa.tl[1], fa.tr[0] - fa.tl[0], fa.bl[1] - fa.tl[1]);
+
+      // Things that repeat down the hall, each at a fixed place in the
+      // world (index k), sliding towards you. Kept until the whole object
+      // is behind the near clip, so it leaves by the screen edge.
+      const along = (spacing: number, len: number, phase = 0) => {
+        const out: { z: number; k: number }[] = [];
+        const first = Math.floor((o + NEAR - len - phase) / spacing) + 1;
+        for (let k = first; ; k++) {
+          const z = k * spacing + phase - o;
+          if (z > FAR) break;
+          if (z + len > NEAR) out.push({ z, k });
+        }
+        return out.reverse(); // far first, so near ones draw on top
+      };
+      const clip = (z: number) => Math.max(z, NEAR);
+
+      // Wallpaper seams.
+      ctx.lineWidth = Math.max(1, w / 1400);
+      for (const { z } of along(0.7, 0)) {
+        if (z < NEAR) continue;
+        ctx.strokeStyle = `rgba(110, 94, 40, ${(0.4 * (1 - fog(z))).toFixed(3)})`;
+        for (const x of [-1, 1]) {
+          const a = P(x, CEIL, z), b = P(x, BB, z);
+          ctx.beginPath();
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(b[0], b[1]);
+          ctx.stroke();
+        }
+      }
+      // Doorways: a dark opening in a light frame, standing on the floor,
+      // a little taller than a person. Each door keeps its side as you
+      // pass (alternating down the hall).
+      const DOOR = 0.95, TOP = -0.32, TRIM = 0.05;
+      for (const { z, k } of along(7.5, DOOR + TRIM, 2.2)) {
+        const x = k % 2 ? -1 : 1;
+        const za = clip(z), zb = clip(z + DOOR);
+        const a = 1 - fog(z) * 0.6;
+        // The frame…
+        const fa1 = clip(z - TRIM), fb1 = clip(z + DOOR + TRIM);
+        if (fb1 > fa1) poly([P(x, TOP - TRIM, fa1), P(x, TOP - TRIM, fb1), P(x, FLOOR, fb1), P(x, FLOOR, fa1)], shade([190, 172, 104], z, a));
+        // …and the dark opening inside it.
+        if (zb > za) poly([P(x, TOP, za), P(x, TOP, zb), P(x, FLOOR, zb), P(x, FLOOR, za)], `rgba(34, 29, 11, ${a.toFixed(3)})`);
+      }
+      // Ceiling lights, each with a soft pool of light on the floor below.
+      const LIGHT = 1;
+      for (const { z } of along(2.6, LIGHT, 0.9)) {
+        const glow = 1 - fog(z);
+        const mid = z + LIGHT / 2;
+        if (mid > NEAR * 4) {
+          const c = P(0, FLOOR, mid);
+          const r = Math.min((0.9 * f) / mid, h * 1.5);
+          const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], r);
+          g.addColorStop(0, `rgba(255, 250, 220, ${(0.16 * glow).toFixed(3)})`);
+          g.addColorStop(1, "rgba(255, 250, 220, 0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(c[0] - r, c[1] - r, r * 2, r * 2);
+        }
+        const za = clip(z), zb = clip(z + LIGHT);
+        if (zb > za) poly([P(-0.32, CEIL, za), P(0.32, CEIL, za), P(0.32, CEIL, zb), P(-0.32, CEIL, zb)], `rgba(255, 251, 228, ${(0.35 + 0.65 * glow).toFixed(3)})`);
+      }
+      ctx.restore();
+      if (!still) raf = requestAnimationFrame(frame);
+    };
+    size();
+    const onResize = () => {
+      size();
+      if (still) frame(performance.now());
+    };
+    addEventListener("resize", onResize);
+    t0 = performance.now();
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      removeEventListener("resize", onResize);
+    };
+  }
+
+  let offKeys: (() => void) | null = null;
+
+  function init() {
+    const root = document.querySelector<HTMLElement>("[data-backrooms]");
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = "1";
+    stopWalk?.();
+    const canvas = root.querySelector<HTMLCanvasElement>("[data-hall]");
+    if (canvas) stopWalk = walk(canvas, matchMedia("(prefers-reduced-motion: reduce)").matches);
+    stopHum?.();
+    stopHum = soundOn() ? fluorescentHum() : null;
+    // Getting here is the achievement: it unlocks as you arrive, so its
+    // toast plays out while you look around.
+    unlock("noclip");
+
+    // The way out: press Esc three times (three quick taps on a touch
+    // screen).
+    let leaving = false;
+    const leave = () => {
+      if (leaving) return;
+      leaving = true;
+      stopHum?.();
+      stopHum = null;
+      root.classList.add("is-leaving"); // a soft fade to white…
+      window.setTimeout(() => (location.href = "/"), 700); // …then home
+    };
+    let escs = 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (++escs >= 3) leave();
+    };
+    let taps: number[] = [];
+    // Three quick taps or clicks anywhere (any pointer: touch or mouse).
+    const onTap = (e: PointerEvent) => {
+      if (e.button > 0) return;
+      const now = performance.now();
+      taps = [...taps.filter(t => now - t < 900), now];
+      if (taps.length >= 3) leave();
+    };
+    document.addEventListener("keydown", onKey);
+    root.addEventListener("pointerdown", onTap);
+    offKeys = () => {
+      document.removeEventListener("keydown", onKey);
+      root.removeEventListener("pointerdown", onTap);
+    };
+  }
+
+  document.addEventListener("astro:page-load", init);
+  document.addEventListener("astro:before-swap", () => {
+    stopHum?.();
+    stopHum = null;
+    stopWalk?.();
+    stopWalk = null;
+    offKeys?.();
+    offKeys = null;
+  });
+</script>
+
+<style>
+  :global(html:has(.backrooms)),
+  :global(html:has(.backrooms) body) {
+    overflow: hidden;
+    background: #3b3417;
+  }
+
+  /* The plain system cursor here: none of the site's pixel art. */
+  :global(html:has(.backrooms)) {
+    cursor: auto;
+  }
+  .backrooms {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: #3b3417;
+  }
+
+  /* The corridor: one still drawing that sways very slowly, as if you're
+     standing there a little unsteadily. No flashing, no scrolling. */
+  /* The walking corridor (drawn by script), with a very slow sway on top,
+     as if you're walking a little unsteadily. */
+  .hall {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    animation: sway 16s ease-in-out infinite alternate;
+  }
+  @keyframes sway {
+    from {
+      transform: scale(1.03) rotate(-0.4deg);
+    }
+    to {
+      transform: scale(1.05) rotate(0.4deg);
+    }
+  }
+  /* Distance: the end of the hall dissolves into murk. */
+  .haze {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    /* A circle sized to the screen's short side, so it sits right in the
+       hall on any shape of screen. */
+    background: radial-gradient(circle 24vmin at 50% 50%, rgb(40 35 15 / 0.75), transparent 100%);
+  }
+  /* The tubes: now and then the whole hall dims a little and recovers,
+     slowly and softly (never a flash). */
+  .dim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: #1a1608;
+    opacity: 0;
+    animation: brownout 11s ease-in-out infinite;
+  }
+  @keyframes brownout {
+    0%,
+    70%,
+    100% {
+      opacity: 0;
+    }
+    80% {
+      opacity: 0.22;
+    }
+  }
+
+  /* As if the stylesheet never loaded: browser-default Times, black. */
+  .unstyled {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    color: #000;
+    font-family: "Times New Roman", Times, serif;
+    font-size: 16px;
+    line-height: normal;
+    text-align: left;
+  }
+  .unstyled h1 {
+    margin: 0.67em 0;
+    font-size: 2em;
+    font-weight: bold;
+  }
+  .unstyled p {
+    margin: 1em 0;
+  }
+  /* The tap hint only where there's no Esc key to press. */
+  .tap-hint {
+    display: none;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    .tap-hint {
+      display: inline;
+    }
+  }
+
+  /* Back to reality: a soft fade to white. */
+  .backrooms:global(.is-leaving)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: #fff;
+    animation: out 0.7s ease-in forwards;
+  }
+  @keyframes out {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hall,
+    .dim {
+      animation: none !important;
+    }
+  }
+</style>
