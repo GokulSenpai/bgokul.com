@@ -167,6 +167,17 @@
     let dolphins: Dolphin[] = [];
     let nextDolphin = 4;
     let seaEnd = 0; // where the cliff starts: dolphins stay left of it
+    // Night only, so the sea isn't empty: fishing boats with lanterns
+    // drifting at anchor, a ship's lights crossing far out on the horizon,
+    // a buoy blinking red near the cliff, and fireflies over the bushes.
+    let skiffs: { x0: number; y: number; range: number; p: number; size: number }[] = [];
+    let ship = { x: 0, v: 0, dir: 1, len: 12 };
+    let buoy = { x: 0, y: 0 };
+    let bushes: { x: number; y: number }[] = [];
+    let flies: { bx: number; by: number; p: number; s: number }[] = [];
+    // And now and then a fish jumps: a silver flick and a ripple.
+    let fish: { x: number; y: number; dir: number; t: number }[] = [];
+    let nextFish = 3;
 
     // Interaction: the beam can lock onto a point (a selected menu item),
     // and pokes make ripples on the sea, or stars or gulls in the sky.
@@ -468,6 +479,14 @@
       b.fillRect(lhX - 2, topY - 6, 5, 1);
       b.fillRect(lhX - 1, topY - 7, 3, 1);
       b.fillRect(lhX, topY - 8, 1, 1);
+      // Night: the keeper's window glows warm halfway up the tower.
+      if (!day) {
+        const wy = groundY - 1 - Math.round(towerH * 0.5);
+        b.fillStyle = "#ffcf7a";
+        b.fillRect(lhX - 1, wy, 1, 2);
+        b.fillStyle = "rgba(255, 207, 122, 0.35)";
+        b.fillRect(lhX - 2, wy, 1, 2);
+      }
       lamp = { x: lhX + 0.5, y: topY - 2.5 };
       gallery = { x: lhX, y: topY };
 
@@ -511,10 +530,12 @@
           }
         }
         // Bushes on the slope.
+        bushes = [];
         for (const fx of [0.18, 0.45, 0.7]) {
           const bx = Math.round(cliffX + (lhX - 18 - cliffX) * fx);
           const ty = tops[bx];
           if (ty === undefined) continue;
+          bushes.push({ x: bx, y: ty - 2 });
           for (let k = -2; k <= 2; k++) at(bx + k, (tops[bx + k] ?? ty) - 1, L.bush[0]);
           for (let k = -1; k <= 1; k++) at(bx + k, (tops[bx + k] ?? ty) - 2, L.bush[1]);
           at(bx, ty - 3, L.bush[1]);
@@ -558,6 +579,9 @@
         for (const g of gulls) (g.x *= sx), (g.y = sky(g.y));
         for (const r of ripples) (r.x *= sx), (r.y = sea(r.y));
         if (shooting) (shooting.x *= sx), (shooting.y = sky(shooting.y));
+        for (const s of skiffs) (s.x0 *= sx), (s.range *= sx), (s.y = Math.round(sea(s.y)));
+        ship.x *= sx;
+        placeBuoy();
         return;
       }
 
@@ -576,6 +600,89 @@
         }
         for (let i = 0; i < 4; i++) boats.push(newBoat({ x: Math.random() * W }));
       }
+      skiffs = [];
+      flies = [];
+      fish = [];
+      if (!day) {
+        // Two fishing boats, one far and small, one nearer, in the open
+        // water between the menu and the cliff.
+        const lo = W * 0.4, hi = seaEnd - 10;
+        const span = Math.max(12, hi - lo);
+        skiffs.push({ x0: lo + span * 0.8, y: horizon + 4, range: span * 0.12, p: Math.random() * 6, size: 0 });
+        skiffs.push({ x0: lo + span * 0.15, y: horizon + Math.round((H - horizon) * 0.45), range: span * 0.1, p: Math.random() * 6, size: 1 });
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        ship = { x: Math.random() * seaEnd, v: 0.6 + Math.random() * 0.5, dir, len: 10 + Math.floor(Math.random() * 6) };
+        for (const bu of bushes)
+          for (let k = 0; k < 3; k++) flies.push({ bx: bu.x, by: bu.y, p: Math.random() * 20, s: 0.5 + Math.random() * 0.6 });
+      }
+      placeBuoy();
+    }
+
+    function placeBuoy() {
+      buoy = { x: Math.round(seaEnd - Math.max(8, W * 0.05)), y: horizon + Math.round((H - horizon) * 0.22) };
+    }
+
+    // A fishing boat at anchor: a dark hull with a little wheelhouse and a
+    // lantern on the mast, its warm light trembling on the water below.
+    function drawSkiff(s: (typeof skiffs)[number], t: number, tq: number) {
+      const x = Math.round(s.x0 + Math.sin(t * 0.03 + s.p) * s.range);
+      const bob = Math.sin(t * 1.2 + s.p) > 0.55 ? -1 : 0;
+      const y = s.y + bob;
+      const flick = 0.82 + 0.18 * Math.sin(tq * 9 + s.p * 3);
+      const big = s.size === 1;
+      const mastH = big ? 6 : 2;
+      const lx = x + (big ? 3 : 1), ly = y - mastH;
+      // Reflection first, so the hull sits on top of it.
+      const step = Math.floor(tq * 4);
+      for (let k = 1; k <= (big ? 6 : 3); k++) {
+        const h = Math.sin(k * 12.9898 + step * 78.233 + s.p) * 43758.5453;
+        const j = Math.round((h - Math.floor(h)) * 2 - 1);
+        const w = 1 + (k % 2) + (big ? 1 : 0);
+        ctx.fillStyle = `rgba(255, 196, 110, ${((0.5 - k * 0.07) * flick).toFixed(2)})`;
+        ctx.fillRect(lx - Math.floor(w / 2) + j, s.y + 1 + k, w, 1);
+      }
+      const g = ctx.createRadialGradient(lx + 0.5, ly + 0.5, 0, lx + 0.5, ly + 0.5, big ? 7 : 4);
+      g.addColorStop(0, `rgba(255, 200, 120, ${(0.45 * flick).toFixed(2)})`);
+      g.addColorStop(1, "rgba(255, 200, 120, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(lx - 7, ly - 7, 15, 15);
+      ctx.fillStyle = "#04040b";
+      if (big) {
+        ctx.fillRect(x - 6, y - 1, 1, 1); // bow
+        ctx.fillRect(x - 5, y, 11, 1);
+        ctx.fillRect(x - 4, y + 1, 9, 1);
+        ctx.fillRect(x - 3, y - 3, 4, 3); // wheelhouse
+        ctx.fillRect(x + 5, y - 1, 1, 1); // stern
+        ctx.fillStyle = "rgba(255, 207, 122, 0.85)";
+        ctx.fillRect(x - 2, y - 2, 2, 1); // its window
+        ctx.fillStyle = "#04040b";
+      } else {
+        ctx.fillRect(x - 2, y, 5, 1);
+      }
+      ctx.fillRect(lx, ly + 1, 1, mastH - 1); // mast
+      ctx.fillStyle = `rgba(255, 214, 140, ${flick.toFixed(2)})`;
+      ctx.fillRect(lx, ly, 1, 1); // lantern
+    }
+
+    // A ship far out, sitting on the horizon: a dark hull with a row of
+    // deck lights, a masthead light and a red or green sidelight.
+    function drawShip(tq: number) {
+      const x0 = Math.round(ship.x);
+      const y = horizon - 1;
+      const at = (dx: number, dy: number, c: string) => {
+        const x = x0 + dx * ship.dir;
+        if (x >= 0 && x < seaEnd - 1) {
+          ctx.fillStyle = c;
+          ctx.fillRect(x, y + dy, 1, 1);
+        }
+      };
+      for (let k = 0; k < ship.len; k++) at(-k, 0, "#03030a");
+      for (let k = ship.len - 4; k < ship.len - 1; k++) at(-k, -1, "#03030a"); // bridge
+      for (let k = 1; k < ship.len - 4; k += 2) at(-k, 0, "rgba(255, 224, 160, 0.75)");
+      at(-(ship.len - 3), -1, "rgba(255, 224, 160, 0.85)");
+      at(-(ship.len - 2), -2, Math.sin(tq * 2) > -0.6 ? "#fff6e0" : "rgba(255, 246, 224, 0.5)");
+      // Sidelight, kept faint so it doesn't outshine the deck lights.
+      at(0, -1, ship.dir > 0 ? "rgba(110, 200, 150, 0.35)" : "rgba(230, 110, 100, 0.35)");
     }
 
     // t: seconds since start; dt: seconds since the last frame. Stars, the
@@ -643,6 +750,65 @@
       for (const wv of waves) {
         const x = (((wv.x + wv.v * tq * 2) % W) + W) % W;
         ctx.fillRect(Math.round(x), wv.y, wv.len, 1);
+      }
+
+      // Night company: the ship crossing, the boats, the buoy, fireflies.
+      if (!day) {
+        ship.x += ship.v * ship.dir * dt;
+        if (ship.dir > 0 && ship.x - ship.len > seaEnd) ship.x = -4;
+        if (ship.dir < 0 && ship.x + ship.len < 0) ship.x = seaEnd + ship.len;
+        drawShip(tq);
+        for (const s of skiffs) drawSkiff(s, t, tq);
+
+        const bob = Math.sin(t * 1.1) > 0.4 ? -1 : 0;
+        const on = t % 3 < 0.45;
+        ctx.fillStyle = "#0a0712";
+        ctx.fillRect(buoy.x - 1, buoy.y + bob, 3, 1);
+        ctx.fillRect(buoy.x, buoy.y - 2 + bob, 1, 2);
+        if (on) {
+          const bg = ctx.createRadialGradient(buoy.x + 0.5, buoy.y - 2.5 + bob, 0, buoy.x + 0.5, buoy.y - 2.5 + bob, 4);
+          bg.addColorStop(0, "rgba(255, 80, 60, 0.45)");
+          bg.addColorStop(1, "rgba(255, 80, 60, 0)");
+          ctx.fillStyle = bg;
+          ctx.fillRect(buoy.x - 4, buoy.y - 7, 9, 9);
+          ctx.fillStyle = "rgba(255, 90, 70, 0.35)";
+          ctx.fillRect(buoy.x, buoy.y + 2, 1, 1);
+          ctx.fillRect(buoy.x - 1, buoy.y + 4, 2, 1);
+        }
+        ctx.fillStyle = on ? "#ff5a46" : "#4a1a1c";
+        ctx.fillRect(buoy.x, buoy.y - 3 + bob, 1, 1);
+
+        if (t > nextFish) {
+          nextFish = t + 5 + Math.random() * 7;
+          const fx = W * 0.4 + Math.random() * Math.max(10, seaEnd - 8 - W * 0.4);
+          fish.push({ x: fx, y: horizon + 3 + Math.floor(Math.random() * (H - horizon) * 0.6), dir: Math.random() < 0.5 ? 1 : -1, t: 0 });
+        }
+        fish = fish.filter(f => {
+          if (f.t === 0) ripples.push({ x: f.x, y: f.y, life: 0.6 });
+          f.t += dt;
+          const u = f.t / 0.55;
+          if (u >= 1) {
+            ripples.push({ x: f.x + f.dir * 5, y: f.y, life: 0.6 });
+            return false;
+          }
+          const hx = Math.round(f.x + f.dir * 5 * u);
+          const hy = Math.round(f.y - Math.sin(u * Math.PI) * 4);
+          ctx.fillStyle = "rgba(220, 228, 255, 0.9)";
+          ctx.fillRect(hx, hy, 1, 1);
+          ctx.fillStyle = "rgba(160, 172, 220, 0.7)";
+          ctx.fillRect(hx - f.dir, hy + (u < 0.5 ? 1 : -1), 1, 1);
+          return true;
+        });
+
+        // Fireflies: slow wandering specks over the bushes, glowing on and off:
+        for (const f of flies) {
+          const a = Math.max(0, Math.sin(t * f.s + f.p)) ** 3;
+          if (a < 0.05) continue;
+          const fx = Math.round(f.bx + Math.sin(t * 0.4 + f.p) * 4);
+          const fy = Math.round(f.by - 2 + Math.sin(t * 0.55 + f.p * 2) * 2);
+          ctx.fillStyle = `rgba(214, 255, 140, ${(a * 0.9).toFixed(2)})`;
+          ctx.fillRect(fx, fy, 1, 1);
+        }
       }
 
       // Day: boats crossing, far ones small and slow. When one leaves, a
