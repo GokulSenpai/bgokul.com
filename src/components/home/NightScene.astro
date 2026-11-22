@@ -52,6 +52,11 @@
   import { currentScene } from "@/scripts/scene";
 
   let stop: (() => void) | null = null;
+  // Several pages have the scene, and each draws its own. So it carries on
+  // from page to page instead of starting over, they share one clock (the
+  // beam keeps turning) and hand over what's moving: clouds, boats, the ship.
+  const T0 = performance.now();
+  let carry: Record<string, any> | null = null;
 
   // Small seeded random, so stars and waves land in the same place each visit.
   function rng(seed: number) {
@@ -380,7 +385,14 @@
       const wasDay = day;
       const old = { W, H, horizon };
       day = document.documentElement.dataset.scene === "day";
-      const keep = built && wasDay === day;
+      let keep = built && wasDay === day;
+      // Arriving from another page with the same scene: pick up its things.
+      if (!built && carry?.day === day) {
+        ({ clouds, boats, skiffs, ship, flies, nextShoot, nextDolphin, nextFish } = carry!);
+        Object.assign(old, { W: carry!.W, H: carry!.H, horizon: carry!.horizon });
+        keep = true;
+      }
+      if (!built) carry = null;
       built = true;
       P = day ? PALETTES.day : PALETTES.night;
       const box = canvas!.parentElement!;
@@ -581,6 +593,11 @@
         if (shooting) (shooting.x *= sx), (shooting.y = sky(shooting.y));
         for (const s of skiffs) (s.x0 *= sx), (s.range *= sx), (s.y = Math.round(sea(s.y)));
         ship.x *= sx;
+        // Three fireflies per bush, following the bushes to their new spots.
+        flies.forEach((f, i) => {
+          const bu = bushes[Math.floor(i / 3)];
+          if (bu) (f.bx = bu.x), (f.by = bu.y);
+        });
         placeBuoy();
         return;
       }
@@ -1014,8 +1031,8 @@
 
     build();
     let raf = 0;
-    const t0 = performance.now();
-    let prev = t0;
+    const t0 = T0;
+    let prev = performance.now();
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - prev) / 1000);
@@ -1098,6 +1115,7 @@
     ro.observe(canvas.parentElement!);
 
     stop = () => {
+      carry = { day, W, H, horizon, clouds, boats, skiffs, ship, flies, nextShoot, nextDolphin, nextFish };
       cancelAnimationFrame(raf);
       window.clearTimeout(resizeTimer);
       ro.disconnect();
