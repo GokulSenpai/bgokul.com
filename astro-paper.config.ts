@@ -5,7 +5,7 @@ export default defineAstroPaperConfig({
     url: "https://bgokul.com/",
     title: "Gokul",
     description:
-      "Indie game developer working in psychological horror. Shipped 17YA. Building more.",
+      "I make games, write stories, and spend an unreasonable amount of time convincing myself I should learn yet another creative skill.",
     author: "Gokul",
     profile: "https://bgokul.com",
     ogImage: "default-og.jpg",
