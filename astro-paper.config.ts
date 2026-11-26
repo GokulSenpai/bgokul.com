@@ -3,7 +3,7 @@ import { defineAstroPaperConfig } from "./src/types/config";
 export default defineAstroPaperConfig({
   site: {
     url: "https://bgokul.com/",
-    title: "Gokul",
+    title: "Gokul Naga Sai",
     description:
       "I make games, write stories, and spend an unreasonable amount of time convincing myself I should learn yet another creative skill.",
     author: "Gokul",
