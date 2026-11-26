@@ -46,7 +46,7 @@ export type Achievement = {
  * unlock("its-id") wherever it happens (see CONTENT.md).
  */
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: "patch-notes", type: "scholar", icon: "scroll", title: "Read the patch notes", desc: "Opened the Resume. Every build has its notes.", hint: "Open the Resume from the main menu." },
+  { id: "patch-notes", type: "scholar", icon: "scroll", title: "Read the patch notes", desc: "Read through the Resume. Every build has its notes.", hint: "Open the Resume from the main menu and read most of the way down." },
   { id: "cartridge", type: "gamer", icon: "cart", title: "Blow on it first", desc: "Inserted a cartridge.", hint: "Start a game in the Design library (Start, then Design)." },
   { id: "pro-gamer", type: "gamer", icon: "gamepad", title: "Pro gamer", desc: "Put every cartridge in the console. Blew on all of them.", hint: "Start every game in the Design library." },
   { id: "bookworm", type: "scholar", icon: "book", title: "Bookworm", desc: "Opened a chapter of the book.", hint: "Open a chapter from the Narrative book." },

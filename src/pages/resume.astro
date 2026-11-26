@@ -177,6 +177,8 @@ const requirements = [
   <Header wide />
 
   <main id="main-content" class="notes-page">
+    <!-- Read-through marker for the "Read the patch notes" achievement. -->
+    <span class="read-mark" aria-hidden="true"></span>
     <!-- Masthead -->
     <header class="mast">
       <p class="kicker">
@@ -328,12 +330,27 @@ const requirements = [
       const timers: number[] = [];
       signal.addEventListener("abort", () => timers.forEach(clearTimeout));
 
-      // Arriving: the patch is installed (the page builds in, in CSS). The
-      // first time, that's an achievement (its toast plays the sound);
-      // after that, just the sound, as the page's arrival chime.
+      // Arriving: the patch is installed (the page builds in, in CSS), with
+      // its arrival chime.
       timers.push(window.setTimeout(() => {
-        if (!unlock("patch-notes") && soundOn()) achievement();
+        if (soundOn()) achievement();
       }, reduce ? 0 : 350));
+
+      // The achievement waits until the notes are actually read: a marker
+      // 70% of the way down the page comes into view. IntersectionObserver
+      // rather than scroll events, so it works however the page moves
+      // (touch momentum, keyboard, find-in-page, a tall screen that shows
+      // the marker without any scrolling at all).
+      const readMark = page.querySelector<HTMLElement>(".read-mark");
+      if (readMark) {
+        const io = new IntersectionObserver(es => {
+          if (!es.some(e => e.isIntersecting)) return;
+          io.disconnect();
+          unlock("patch-notes");
+        });
+        io.observe(readMark);
+        signal.addEventListener("abort", () => io.disconnect());
+      }
 
       // Leaving (◀ Main menu or Esc): progress saved, and the page settles
       // away as it fades (CSS, on html.sys-leaving).
@@ -417,6 +434,15 @@ const requirements = [
     padding: clamp(2rem, 7vh, 5rem) 1rem 3rem;
     font-family: var(--font-console), system-ui, sans-serif;
     color: var(--ink);
+    position: relative;
+  }
+  .read-mark {
+    position: absolute;
+    top: 70%;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
   }
   .notes-page a {
     color: inherit;
