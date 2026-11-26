@@ -262,6 +262,7 @@ const scuffs = svg(
 
 <script>
   import { navigate } from "astro:transitions/client";
+  import { prefetch } from "astro:prefetch";
   import { wheelSelect } from "@/scripts/wheelSelect";
   import { sfx, crtOn, crtOff } from "@/components/home/bootSound";
 
@@ -474,6 +475,9 @@ const scuffs = svg(
       const holder = deck?.offsetParent ? cards[active] : slots[active];
       const cart = holder.querySelector<HTMLElement>(".cart");
       root!.classList.add("is-starting", "cart-moving");
+      // Fetch the game page while the cartridge goes in, so it's ready (on
+      // mobile data too) by the time the loading bar fills.
+      prefetch(href, { ignoreSlowConnection: true });
       if (cart) insertCartridge(cart);
       setTimeout(() => navigate(href), 1900);
     }

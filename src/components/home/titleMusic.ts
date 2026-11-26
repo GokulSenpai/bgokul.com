@@ -7,6 +7,7 @@
  * Browsers only allow audio after a key press or tap, so start() must be
  * called from one (the boot screen's "Press start", or the sound toggle).
  */
+import { wake } from "./bootSound";
 
 const CHORDS = [
   [110, 164.81, 261.63, 392], // Am7
@@ -117,6 +118,7 @@ export function start() {
   } catch {
     return;
   }
+  wake(ctx);
   playing = true;
   master = ctx.createGain();
   master.gain.setValueAtTime(0, ctx.currentTime);

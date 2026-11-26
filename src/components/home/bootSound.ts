@@ -16,6 +16,22 @@
  * block sound before that. sfx() is the same bell, for the menu's sounds.
  */
 
+/**
+ * Phones only let sound start on a finished tap (finger lifted), not on
+ * touching down, so a context made on pointerdown starts muted. This
+ * resumes it on the next real gesture (often the end of that same tap).
+ */
+export function wake(c: AudioContext) {
+  if (c.state !== "suspended") return;
+  c.resume().catch(() => {});
+  const evs = ["pointerup", "touchend", "click", "keydown"] as const;
+  const go = () => {
+    if (c.state === "suspended") c.resume().catch(() => {});
+    evs.forEach(ev => document.removeEventListener(ev, go, true));
+  };
+  evs.forEach(ev => document.addEventListener(ev, go, true));
+}
+
 let ctx: AudioContext | null = null;
 
 type Voice = { c: AudioContext; out: AudioNode };
@@ -101,7 +117,7 @@ export function playBootSound(blocks = 15) {
     return;
   }
   const c = ctx;
-  if (c.state === "suspended") c.resume().catch(() => {});
+  wake(c);
   const v: Voice = { c, out: chain(c, 0.6) };
   const t0 = c.currentTime + 0.05;
 
@@ -167,7 +183,7 @@ export function playBootSound(blocks = 15) {
 export function itemGet() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, 0.55) };
     const t0 = c.currentTime + 0.03;
     const run = [880, 1108.73, 1318.51, 1760]; // A C# E A
@@ -186,7 +202,7 @@ export function itemGet() {
 export function pageTurn() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const t0 = c.currentTime + 0.02;
     const len = Math.floor(c.sampleRate * 0.5);
     const buf = c.createBuffer(1, len, c.sampleRate);
@@ -238,7 +254,7 @@ function noise(c: AudioContext, seconds: number) {
 export function bookClose() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const t0 = c.currentTime + 0.02;
     const src = noise(c, 0.4);
     const bp = c.createBiquadFilter();
@@ -283,7 +299,7 @@ export function bookClose() {
 export function whoosh() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const t0 = c.currentTime + 0.02;
     const src = noise(c, 0.6);
     const bp = c.createBiquadFilter();
@@ -306,7 +322,7 @@ export function whoosh() {
 export function thud() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const t0 = c.currentTime + 0.01;
     const o = c.createOscillator();
     const og = c.createGain();
@@ -341,7 +357,7 @@ export function thud() {
 export function unscrew() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const t0 = c.currentTime + 0.02;
     const out = c.createGain();
     out.gain.value = 0.9;
@@ -403,7 +419,7 @@ export function unscrew() {
 export function screwIn() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const t0 = c.currentTime + 0.02;
     const out = c.createGain();
     out.gain.value = 0.9;
@@ -451,7 +467,7 @@ export function screwIn() {
 export function gameOver() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, 0.4) };
     const t0 = c.currentTime + 0.05;
     [659.25, 523.25, 440, 329.63].forEach((f, i) => bell(v, f, t0 + i * 0.16, 0.04, 1.6));
@@ -463,7 +479,7 @@ export function gameOver() {
 export function continueCoin() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, 0.4) };
     const t0 = c.currentTime + 0.02;
     bell(v, 1318.51, t0, 0.045, 0.9);
@@ -478,7 +494,7 @@ export function continueCoin() {
 export function achievement(volume = 0.5) {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, volume) };
     const t0 = c.currentTime + 0.03;
     // The pop: a short, round thump.
@@ -504,7 +520,7 @@ export function achievement(volume = 0.5) {
 export function progressSaved() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, 0.45) };
     const t0 = c.currentTime + 0.03;
     [659.25, 880, 1108.73].forEach(f => bell(v, f, t0, 0.032, 1.2));
@@ -519,7 +535,7 @@ export function progressSaved() {
 export function fluorescentHum(): () => void {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const out = c.createGain();
     out.gain.setValueAtTime(0.0001, c.currentTime);
     out.gain.exponentialRampToValueAtTime(1, c.currentTime + 1.5);
@@ -576,7 +592,7 @@ export function glitch() {
 export function trophyOpen() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, 0.32) };
     const t0 = c.currentTime + 0.03;
     [1318.51, 1567.98, 1975.53, 2637.02].forEach((f, i) => bell(v, f, t0 + i * 0.07, 0.03 - i * 0.004, 1.6));
@@ -587,7 +603,7 @@ export function trophyOpen() {
 export function trophyClose() {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const v: Voice = { c, out: chain(c, 0.3) };
     const t0 = c.currentTime + 0.03;
     [1975.53, 1567.98, 1318.51].forEach((f, i) => bell(v, f, t0 + i * 0.07, 0.025, 1.2));
@@ -693,7 +709,7 @@ function puff(c: AudioContext, out: AudioNode, at: number, len: number, vol: num
 function withCtx(play: (c: AudioContext, out: AudioNode, t0: number) => void, ms = 1400) {
   try {
     const c = new AudioContext();
-    if (c.state === "suspended") c.resume().catch(() => {});
+    wake(c);
     const out = c.createGain();
     out.gain.value = 1;
     out.connect(c.destination);
@@ -785,7 +801,7 @@ export function sfx(notes: number[], gap = 0.1, vol = 0.06) {
       sfxCtx = new AudioContext();
       sfxOut = chain(sfxCtx, 0.7);
     }
-    if (sfxCtx.state === "suspended") sfxCtx.resume().catch(() => {});
+    wake(sfxCtx);
     const at = sfxCtx.currentTime + 0.01;
     notes.forEach((f, i) => bell({ c: sfxCtx!, out: sfxOut! }, f, at + i * gap, vol, 1.8));
   } catch {}

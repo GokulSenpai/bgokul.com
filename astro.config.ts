@@ -19,6 +19,27 @@ import {
 import { transformerFileName } from "./src/utils/transformers/fileName";
 import rehypeNoOrphans from "./src/utils/rehypeNoOrphans.js";
 import config from "./astro-paper.config";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// Is there a published (non-draft) Journal entry yet? Until there is, the
+// two Journal achievements ("Dear diary", "Spread the word") are left out,
+// since nobody could earn them. Checked at build (and dev server start).
+function hasJournalEntry(dir = "src/content/posts"): boolean {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  return entries.some(e => {
+    const path = join(dir, e.name);
+    if (e.isDirectory()) return hasJournalEntry(path);
+    if (!/\.mdx?$/.test(e.name) || e.name.startsWith("_")) return false;
+    const front = readFileSync(path, "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+    return !/^draft:\s*true\b/m.test(front);
+  });
+}
 
 export default defineConfig({
   site: config.site.url,
@@ -71,6 +92,7 @@ export default defineConfig({
   },
   vite: {
     plugins: [tailwindcss()],
+    define: { __HAS_JOURNAL__: JSON.stringify(hasJournalEntry()) },
   },
   fonts: [
     {

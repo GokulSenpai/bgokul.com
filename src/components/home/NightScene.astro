@@ -1033,14 +1033,24 @@
     let raf = 0;
     const t0 = T0;
     let prev = performance.now();
+    // Phones: 30 fps is plenty for pixel art and saves battery (many phones
+    // refresh at 90 or 120 Hz). And no drawing while scrolled out of view.
+    const minGap = matchMedia("(pointer: coarse)").matches ? 1000 / 30 - 2 : 0;
+    let onScreen = true;
+    const io = new IntersectionObserver(([e]) => (onScreen = e.isIntersecting));
+    io.observe(canvas);
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (now - prev < minGap) return;
       const dt = Math.min(0.1, (now - prev) / 1000);
       prev = now;
-      if (document.hidden) return;
+      if (document.hidden || !onScreen) return;
       frame((now - t0) / 1000, dt);
     };
-    if (reduce) frame(2.2);
+    // Reduced motion (e.g. Windows' "Animation effects" off): one still
+    // picture. Redraws (aiming, resizing) pass no time (dt 0), so nothing
+    // creeps forward a step with each click.
+    if (reduce) frame(2.2, 0);
     else raf = requestAnimationFrame(loop);
 
     let resizeTimer = 0;
@@ -1048,14 +1058,14 @@
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         build();
-        if (reduce) frame(2.2);
+        if (reduce) frame(2.2, 0);
       }, 150);
     };
     // Day/night switched (the platinum's switch): rebuild in the new colours.
     const onScene = () => {
       shooting = null;
       build();
-      if (reduce) frame(2.2);
+      if (reduce) frame(2.2, 0);
     };
     // Menu selection aims the light; null lets it go.
     const onAim = (e: Event) => {
@@ -1071,7 +1081,7 @@
       if (reduce) {
         aim = 1;
         target = p;
-        frame(2.2);
+        frame(2.2, 0);
       }
     };
     // A poke: sky gets a shooting star (night) or a gull (day), the sea a ripple.
@@ -1084,7 +1094,8 @@
         unlock("keeper");
         if (reduce) {
           // No animation: show him waving for a moment, then gone.
-          frame(2.2, 1);
+          keeper = 1;
+          frame(2.2, 0);
           window.setTimeout(() => {
             keeper = -1;
             frame(2.2, 0);
@@ -1119,6 +1130,7 @@
       cancelAnimationFrame(raf);
       window.clearTimeout(resizeTimer);
       ro.disconnect();
+      io.disconnect();
       document.removeEventListener("night:aim", onAim);
       document.removeEventListener("night:poke", onPoke);
       document.removeEventListener("scene:change", onScene);

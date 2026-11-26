@@ -39,18 +39,23 @@ export type Achievement = {
   icon: string;
   /** Which class it speaks to (Scholar, Gamer, Tinkerer, Wanderer, Bard). */
   type: PlayerType;
+  /** Needs a Journal entry to earn: left out until one is published. */
+  journal?: boolean;
 };
+
+/** Set at build (astro.config.ts): is there a published Journal entry? */
+declare const __HAS_JOURNAL__: boolean;
 
 /**
  * Every achievement. To add one: give it an entry here, then call
  * unlock("its-id") wherever it happens (see CONTENT.md).
  */
-export const ACHIEVEMENTS: Achievement[] = [
+const ALL: Achievement[] = [
   { id: "patch-notes", type: "scholar", icon: "scroll", title: "Read the patch notes", desc: "Read through the Resume. Every build has its notes.", hint: "Open the Resume from the main menu and read most of the way down." },
   { id: "cartridge", type: "gamer", icon: "cart", title: "Blow on it first", desc: "Inserted a cartridge.", hint: "Start a game in the Design library (Start, then Design)." },
   { id: "pro-gamer", type: "gamer", icon: "gamepad", title: "Pro gamer", desc: "Put every cartridge in the console. Blew on all of them.", hint: "Start every game in the Design library." },
   { id: "bookworm", type: "scholar", icon: "book", title: "Bookworm", desc: "Opened a chapter of the book.", hint: "Open a chapter from the Narrative book." },
-  { id: "dear-diary", type: "scholar", icon: "pencil", title: "Dear diary", desc: "Read an entry in the Journal.", hint: "Read an entry in the Journal." },
+  { id: "dear-diary", type: "scholar", icon: "pencil", title: "Dear diary", desc: "Read an entry in the Journal.", hint: "Read an entry in the Journal.", journal: true },
   { id: "taking-apart", type: "scholar", icon: "screw", title: "Taking it apart", desc: "Opened a breakdown.", hint: "Open a case file in Breakdowns." },
   { id: "all-pages", type: "scholar", icon: "page", title: "All 8 pages", desc: "Collected every page. He was there anyway.", hint: "Read the Slender breakdown all the way to the end." },
 
@@ -68,7 +73,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "item-get", type: "bard", icon: "card", title: "Item obtained", desc: "Picked up the business card.", hint: "Open Contact from the main menu." },
   { id: "pen-pal", type: "bard", icon: "mail", title: "Pen pal", desc: "Reached for the email. Say hi any time.", hint: "On Contact, use the card or copy the mail address." },
   { id: "networking", type: "bard", icon: "link", title: "Networking", desc: "Opened LinkedIn.", hint: "On Contact, open LinkedIn." },
-  { id: "share", type: "bard", icon: "share", title: "Spread the word", desc: "Shared a Journal entry.", hint: "Share a Journal entry (the icons at the end of an entry)." },
+  { id: "share", type: "bard", icon: "share", title: "Spread the word", desc: "Shared a Journal entry.", hint: "Share a Journal entry (the icons at the end of an entry).", journal: true },
 
   { id: "rage-quit", type: "gamer", icon: "door", title: "Rage quit", desc: "Tried to quit. It didn't take.", hint: "Choose Quit on the main menu." },
   { id: "nobody-quits", type: "gamer", icon: "power", title: "Nobody quits", desc: "Sat through the whole shutdown. Came back anyway.", hint: "Choose Quit, then keep choosing Yes.", hidden: true },
@@ -77,6 +82,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "sudo", type: "tinkerer", icon: "key", title: "Nice try", desc: "Asked the terminal for admin powers.", hint: "In the Coding terminal, type sudo.", hidden: true },
   { id: "decorator", type: "tinkerer", icon: "paint", title: "Interior decorator", desc: "Repainted the terminal.", hint: "In the Coding terminal, type color a.", hidden: true },
 ];
+export const ACHIEVEMENTS = ALL.filter(a => !a.journal || __HAS_JOURNAL__);
 
 /** Where each achievement happens: the Achievements screen's "Go" links. */
 export const WHERE: Record<string, string> = {

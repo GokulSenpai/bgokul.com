@@ -117,7 +117,14 @@ const rssHref = getRelativeLocaleUrl(
       } catch {}
     </script>
 
-    <ClientRouter />
+    <!-- Touch screens: no browser view transition between pages (it can
+         freeze on its last frame on phones). Every exit already fades to
+         black, so the swap underneath can be instant. Runs before the
+         router loads, so it sees no startViewTransition and just swaps. -->
+    <script is:inline>
+      if (matchMedia("(pointer: coarse)").matches) document.startViewTransition = undefined;
+    </script>
+    <ClientRouter fallback="swap" />
   </head>
   <body
     class="bg-background font-app text-foreground selection:bg-accent/75 selection:text-accent-foreground flex min-h-svh flex-col"
@@ -127,6 +134,7 @@ const rssHref = getRelativeLocaleUrl(
       import "@/scripts/theme";
       import "@/scripts/cameFrom";
       import "@/scripts/homeLink";
+      import "@/scripts/navGuard";
     </script>
   </body>
 </html>
